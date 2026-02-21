@@ -7,7 +7,7 @@ const (
 	// Status indicators
 	SymRolling = "●"
 	SymLinedUp = "♪"
-	SymStalled = "◑"
+	SymStalled = "⊘"
 	SymPassed  = "✓"
 
 	// Bead string

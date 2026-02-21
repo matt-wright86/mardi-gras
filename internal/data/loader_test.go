@@ -96,10 +96,24 @@ func TestIsBlocked(t *testing.T) {
 }
 
 func TestLoadRealBeads(t *testing.T) {
-	// Test against real Beads data if available
-	path := "/Users/matthewwright/Work/voice-vault/.beads/issues.jsonl"
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		t.Skip("real beads data not available")
+	// Use BEADS_JSONL env var if set, otherwise try common local path
+	path := os.Getenv("BEADS_JSONL")
+	if path == "" {
+		// Fallback for local development only
+		home, _ := os.UserHomeDir()
+		candidates := []string{
+			filepath.Join(home, "Work", "voice-vault", ".beads", "issues.jsonl"),
+			".beads/issues.jsonl",
+		}
+		for _, c := range candidates {
+			if _, err := os.Stat(c); err == nil {
+				path = c
+				break
+			}
+		}
+	}
+	if path == "" {
+		t.Skip("no real beads data available (set BEADS_JSONL to override)")
 	}
 
 	issues, err := LoadIssues(path)

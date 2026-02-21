@@ -53,6 +53,9 @@ var (
 			Foreground(BrightGold).
 			Bold(true)
 
+	ItemSelectedBg = lipgloss.NewStyle().
+			Background(DimPurple)
+
 	// Detail panel (right side)
 	DetailBorder = lipgloss.NewStyle().
 			BorderLeft(true).

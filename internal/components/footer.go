@@ -24,7 +24,6 @@ var ParadeBindings = []FooterBinding{
 	{Key: "j/k", Desc: "navigate"},
 	{Key: "tab", Desc: "switch pane"},
 	{Key: "c", Desc: "toggle closed"},
-	{Key: "/", Desc: "search"},
 	{Key: "q", Desc: "quit"},
 }
 

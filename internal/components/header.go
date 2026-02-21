@@ -56,12 +56,17 @@ func (h Header) renderBeadString() string {
 	beads := []string{ui.BeadRound, ui.BeadDiamond}
 
 	var parts []string
+	visibleWidth := 0
 	ci := 0
-	for i := 0; len(strings.Join(parts, "")) < h.Width-2; i++ {
-		bead := beads[i%2]
+	for visibleWidth < h.Width-2 {
+		bead := beads[ci%2]
 		style := colors[ci%3]
 		parts = append(parts, style.Render(bead))
-		parts = append(parts, colors[ci%3].Render(ui.BeadDash))
+		visibleWidth++
+		if visibleWidth < h.Width-2 {
+			parts = append(parts, style.Render(ui.BeadDash))
+			visibleWidth++
+		}
 		ci++
 	}
 

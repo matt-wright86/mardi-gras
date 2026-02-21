@@ -46,7 +46,7 @@ mg --path /path/to/.beads/issues.jsonl
 |------|---------|
 | **Rolling** ● | In progress — actively being worked on |
 | **Lined Up** ♪ | Open and ready — no blockers |
-| **Stalled** ◑ | Open but blocked by dependencies |
+| **Stalled** ⊘ | Open but blocked by dependencies |
 | **Past the Stand** ✓ | Closed/completed |
 | **Float** | An issue card or group |
 | **Bead String** | The decorative separator bar |

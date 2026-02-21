@@ -18,7 +18,7 @@ func LoadIssues(path string) ([]Issue, error) {
 
 	var issues []Issue
 	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 
 	lineNum := 0
 	for scanner.Scan() {

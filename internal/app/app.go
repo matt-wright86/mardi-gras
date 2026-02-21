@@ -1,6 +1,8 @@
 package app
 
 import (
+	"time"
+
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -27,22 +29,32 @@ type Model struct {
 	activPane   Pane
 	width       int
 	height      int
+	watchPath   string
+	lastFileMod time.Time
 	ready       bool
 }
 
 // New creates a new app model from loaded issues.
-func New(issues []data.Issue) Model {
+func New(issues []data.Issue, watchPath string) Model {
 	groups := data.GroupByParade(issues)
+	lastFileMod := time.Time{}
+	if watchPath != "" {
+		if mod, err := data.FileModTime(watchPath); err == nil {
+			lastFileMod = mod
+		}
+	}
 	return Model{
-		issues:    issues,
-		groups:    groups,
-		activPane: PaneParade,
+		issues:      issues,
+		groups:      groups,
+		activPane:   PaneParade,
+		watchPath:   watchPath,
+		lastFileMod: lastFileMod,
 	}
 }
 
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
-	return nil
+	return data.WatchFile(m.watchPath, m.lastFileMod)
 }
 
 // Update implements tea.Model.
@@ -61,8 +73,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case data.FileChangedMsg:
 		m.issues = msg.Issues
 		m.groups = data.GroupByParade(msg.Issues)
-		m.layout()
-		return m, nil
+		if !msg.LastMod.IsZero() {
+			m.lastFileMod = msg.LastMod
+		}
+		m.rebuildParade()
+		return m, data.WatchFile(m.watchPath, m.lastFileMod)
+
+	case data.FileUnchangedMsg:
+		if !msg.LastMod.IsZero() {
+			m.lastFileMod = msg.LastMod
+		}
+		return m, data.WatchFile(m.watchPath, m.lastFileMod)
+
+	case data.FileWatchErrorMsg:
+		return m, data.WatchFile(m.watchPath, m.lastFileMod)
 	}
 
 	// Forward to detail viewport when focused
@@ -190,7 +214,7 @@ func (m *Model) layout() {
 	m.detail.AllIssues = m.issues
 	m.detail.IssueMap = data.BuildIssueMap(m.issues)
 
-	// Initialize parade if first layout
+	// Initialize parade on first layout
 	if len(m.parade.Items) == 0 {
 		m.parade = views.NewParade(m.issues, paradeW, bodyH)
 		m.syncSelection()
@@ -200,6 +224,73 @@ func (m *Model) layout() {
 	m.detail.Viewport = viewport.New(detailW-2, bodyH)
 	if m.parade.SelectedIssue != nil {
 		m.detail.SetIssue(m.parade.SelectedIssue)
+	}
+}
+
+// rebuildParade reconstructs the parade from current issues, preserving selection if possible.
+func (m *Model) rebuildParade() {
+	oldSelectedID := ""
+	if m.parade.SelectedIssue != nil {
+		oldSelectedID = m.parade.SelectedIssue.ID
+	}
+	oldShowClosed := m.parade.ShowClosed
+
+	paradeW := m.parade.Width
+	bodyH := m.parade.Height
+	if paradeW == 0 {
+		paradeW = m.width * 2 / 5
+	}
+	if bodyH == 0 {
+		bodyH = m.height - 4
+	}
+
+	m.header = components.Header{
+		Width:  m.width,
+		Groups: m.groups,
+	}
+
+	m.parade = views.NewParade(m.issues, paradeW, bodyH)
+	if oldShowClosed {
+		m.parade.ToggleClosed()
+	}
+	m.restoreParadeSelection(oldSelectedID)
+
+	m.detail.AllIssues = m.issues
+	m.detail.IssueMap = data.BuildIssueMap(m.issues)
+	m.syncSelection()
+}
+
+// restoreParadeSelection restores selection by issue ID when possible.
+func (m *Model) restoreParadeSelection(issueID string) {
+	if issueID == "" {
+		return
+	}
+	for i, item := range m.parade.Items {
+		if item.IsHeader || item.Issue == nil || item.Issue.ID != issueID {
+			continue
+		}
+		m.parade.Cursor = i
+		m.parade.SelectedIssue = item.Issue
+
+		// Keep the selected row visible after rebuild.
+		if m.parade.Cursor < m.parade.ScrollOffset {
+			m.parade.ScrollOffset = m.parade.Cursor
+		}
+		if m.parade.Cursor >= m.parade.ScrollOffset+m.parade.Height {
+			m.parade.ScrollOffset = m.parade.Cursor - m.parade.Height + 1
+		}
+
+		maxOffset := len(m.parade.Items) - m.parade.Height
+		if maxOffset < 0 {
+			maxOffset = 0
+		}
+		if m.parade.ScrollOffset > maxOffset {
+			m.parade.ScrollOffset = maxOffset
+		}
+		if m.parade.ScrollOffset < 0 {
+			m.parade.ScrollOffset = 0
+		}
+		return
 	}
 }
 

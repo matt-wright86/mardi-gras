@@ -130,11 +130,13 @@ func (p *Parade) ToggleClosed() {
 		selectedID = p.SelectedIssue.ID
 	}
 	p.rebuildItems()
+	p.clampScroll()
 	// Restore cursor to the same issue if possible
 	for i, item := range p.Items {
 		if !item.IsHeader && item.Issue.ID == selectedID {
 			p.Cursor = i
 			p.SelectedIssue = item.Issue
+			p.ensureVisible()
 			return
 		}
 	}
@@ -143,8 +145,27 @@ func (p *Parade) ToggleClosed() {
 		if !item.IsHeader {
 			p.Cursor = i
 			p.SelectedIssue = item.Issue
+			p.ensureVisible()
 			return
 		}
+	}
+	// No selectable items at all
+	p.Cursor = 0
+	p.ScrollOffset = 0
+	p.SelectedIssue = nil
+}
+
+// clampScroll ensures ScrollOffset is within valid bounds for the current Items slice.
+func (p *Parade) clampScroll() {
+	maxOffset := len(p.Items) - p.Height
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if p.ScrollOffset > maxOffset {
+		p.ScrollOffset = maxOffset
+	}
+	if p.ScrollOffset < 0 {
+		p.ScrollOffset = 0
 	}
 }
 
@@ -156,6 +177,7 @@ func (p *Parade) ensureVisible() {
 	if p.Cursor >= p.ScrollOffset+p.Height {
 		p.ScrollOffset = p.Cursor - p.Height + 1
 	}
+	p.clampScroll()
 }
 
 // SetSize updates the available dimensions.
@@ -166,6 +188,13 @@ func (p *Parade) SetSize(width, height int) {
 
 // View renders the parade list.
 func (p *Parade) View() string {
+	if len(p.Items) == 0 {
+		content := "No issues found"
+		return lipgloss.NewStyle().Width(p.Width).Height(p.Height).Render(content)
+	}
+
+	p.clampScroll()
+
 	var lines []string
 
 	end := p.ScrollOffset + p.Height
@@ -237,7 +266,9 @@ func (p *Parade) renderIssue(issue *data.Issue, selected bool) string {
 
 	if selected {
 		cursor := ui.ItemCursor.Render(ui.Cursor + " ")
-		return cursor + line
+		row := cursor + line
+		// Full-width highlight for selected row
+		return ui.ItemSelectedBg.Width(p.Width).Render(row)
 	}
 
 	return ui.ItemNormal.Render(line)
