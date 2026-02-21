@@ -23,3 +23,6 @@ go.work.sum
 
 # GoReleaser
 /dist/
+
+# Internal docs (keep local, do not track)
+docs/internal/

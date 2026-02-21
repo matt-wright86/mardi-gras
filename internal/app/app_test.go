@@ -57,3 +57,87 @@ func TestFileChangedMsgPreservesSelectionAndClosedState(t *testing.T) {
 		t.Fatalf("expected selected issue open-2 after refresh, got %+v", got.parade.SelectedIssue)
 	}
 }
+
+func TestFilteringModeAcceptsTypedInput(t *testing.T) {
+	issues := []data.Issue{
+		testIssue("alpha-1", data.StatusOpen),
+		testIssue("beta-1", data.StatusOpen),
+	}
+
+	m := New(issues, "")
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	got := model.(Model)
+
+	model, _ = got.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	got = model.(Model)
+	if !got.filtering {
+		t.Fatal("expected filtering mode to be active after pressing /")
+	}
+
+	model, _ = got.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
+	got = model.(Model)
+	if got.filterInput.Value() != "b" {
+		t.Fatalf("expected filter input value %q, got %q", "b", got.filterInput.Value())
+	}
+}
+
+func TestFilteringModeQStillQuits(t *testing.T) {
+	issues := []data.Issue{
+		testIssue("alpha-1", data.StatusOpen),
+	}
+
+	m := New(issues, "")
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	got := model.(Model)
+
+	model, _ = got.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	got = model.(Model)
+	if !got.filtering {
+		t.Fatal("expected filtering mode to be active after pressing /")
+	}
+
+	_, cmd := got.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if cmd == nil {
+		t.Fatal("expected quit command when pressing q in filtering mode")
+	}
+
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Fatalf("expected tea.QuitMsg from quit command, got %T", msg)
+	}
+}
+
+func TestHelpCanOpenFromFilteringMode(t *testing.T) {
+	issues := []data.Issue{
+		testIssue("alpha-1", data.StatusOpen),
+	}
+
+	m := New(issues, "")
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	got := model.(Model)
+
+	model, _ = got.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	got = model.(Model)
+	if !got.filtering {
+		t.Fatal("expected filtering mode to be active after pressing /")
+	}
+
+	model, _ = got.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	got = model.(Model)
+	if !got.showHelp {
+		t.Fatal("expected help overlay to open from filtering mode")
+	}
+	if !got.filtering {
+		t.Fatal("expected filtering mode state to be preserved while help is open")
+	}
+
+	// Closing help should return to prior mode.
+	model, _ = got.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	got = model.(Model)
+	if got.showHelp {
+		t.Fatal("expected help overlay to close on esc")
+	}
+	if !got.filtering {
+		t.Fatal("expected filtering mode to resume after closing help")
+	}
+}

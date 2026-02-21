@@ -106,4 +106,40 @@ var (
 
 	DepBlocks = lipgloss.NewStyle().
 			Foreground(StatusLinedUp)
+
+	// Filter Input
+	InputPrompt = lipgloss.NewStyle().
+			Foreground(BrightGold).
+			Bold(true).
+			PaddingLeft(1)
+
+	InputText = lipgloss.NewStyle().
+			Foreground(White)
+
+	InputCursor = lipgloss.NewStyle().
+			Foreground(Purple)
+
+	// Help Overlay
+	HelpOverlayBg = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(Purple).
+			Background(lipgloss.Color("#1B1B1B")).
+			Padding(0, 2)
+
+	HelpTitle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(BrightGold).
+			Align(lipgloss.Center)
+
+	HelpSection = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(White).
+			Underline(true)
+
+	HelpKey = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(StatusLinedUp)
+
+	HelpDesc = lipgloss.NewStyle().
+			Foreground(Light)
 )

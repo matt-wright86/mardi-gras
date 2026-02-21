@@ -21,6 +21,8 @@ type Footer struct {
 
 // ParadeBindings are the default keybindings for the parade view.
 var ParadeBindings = []FooterBinding{
+	{Key: "?", Desc: "help"},
+	{Key: "/", Desc: "filter"},
 	{Key: "j/k", Desc: "navigate"},
 	{Key: "tab", Desc: "switch pane"},
 	{Key: "c", Desc: "toggle closed"},
@@ -29,6 +31,8 @@ var ParadeBindings = []FooterBinding{
 
 // DetailBindings are keybindings when the detail pane is focused.
 var DetailBindings = []FooterBinding{
+	{Key: "?", Desc: "help"},
+	{Key: "/", Desc: "filter"},
 	{Key: "j/k", Desc: "scroll"},
 	{Key: "tab", Desc: "switch pane"},
 	{Key: "esc", Desc: "back"},

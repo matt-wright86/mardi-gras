@@ -3,11 +3,13 @@ package app
 import (
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/matt-wright86/mardi-gras/internal/components"
 	"github.com/matt-wright86/mardi-gras/internal/data"
+	"github.com/matt-wright86/mardi-gras/internal/ui"
 	"github.com/matt-wright86/mardi-gras/internal/views"
 )
 
@@ -31,6 +33,9 @@ type Model struct {
 	height      int
 	watchPath   string
 	lastFileMod time.Time
+	filterInput textinput.Model
+	filtering   bool
+	showHelp    bool
 	ready       bool
 }
 
@@ -43,12 +48,20 @@ func New(issues []data.Issue, watchPath string) Model {
 			lastFileMod = mod
 		}
 	}
+	ti := textinput.New()
+	ti.Prompt = ui.InputPrompt.Render("/ ")
+	ti.Placeholder = "Filter type:bug, p1, deployment..."
+	ti.TextStyle = ui.InputText
+	ti.Cursor.Style = ui.InputCursor
+	ti.Width = 50
+
 	return Model{
 		issues:      issues,
 		groups:      groups,
 		activPane:   PaneParade,
 		watchPath:   watchPath,
 		lastFileMod: lastFileMod,
+		filterInput: ti,
 	}
 }
 
@@ -61,6 +74,15 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+		if m.showHelp {
+			return m.handleHelpKey(msg)
+		}
+		if m.filtering {
+			return m.handleFilteringKey(msg)
+		}
 		return m.handleKey(msg)
 
 	case tea.WindowSizeMsg:
@@ -99,10 +121,59 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q", "?":
+		m.showHelp = false
+		return m, nil
+	default:
+		// Ignore all other keys while help is open.
+		return m, nil
+	}
+}
+
+func (m Model) handleFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q":
+		return m, tea.Quit
+	case "?":
+		m.showHelp = true
+		return m, nil
+	case "esc":
+		m.filtering = false
+		m.filterInput.SetValue("")
+		m.filterInput.Blur()
+		m.rebuildParade()
+		return m, nil
+	case "enter":
+		m.filtering = false
+		m.filterInput.Blur()
+		// Keep query applied
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	oldVal := m.filterInput.Value()
+	m.filterInput, cmd = m.filterInput.Update(msg)
+	if m.filterInput.Value() != oldVal {
+		m.rebuildParade()
+	}
+	return m, cmd
+}
+
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "q", "ctrl+c":
+	case "q":
 		return m, tea.Quit
+
+	case "?":
+		m.showHelp = true
+		return m, nil
+
+	case "/":
+		m.filtering = true
+		m.filterInput.Focus()
+		return m, textinput.Blink
 
 	case "tab":
 		if m.activPane == PaneParade {
@@ -244,12 +315,19 @@ func (m *Model) rebuildParade() {
 		bodyH = m.height - 4
 	}
 
-	m.header = components.Header{
-		Width:  m.width,
-		Groups: m.groups,
+	filteredIssues := data.FilterIssues(m.issues, m.filterInput.Value())
+	groups := m.groups
+	if m.filterInput.Value() != "" {
+		// Use section counts from the filtered list while filtering.
+		groups = data.GroupByParade(filteredIssues)
 	}
 
-	m.parade = views.NewParade(m.issues, paradeW, bodyH)
+	m.header = components.Header{
+		Width:  m.width,
+		Groups: groups,
+	}
+
+	m.parade = views.NewParade(filteredIssues, paradeW, bodyH)
 	if oldShowClosed {
 		m.parade.ToggleClosed()
 	}
@@ -309,14 +387,32 @@ func (m Model) View() string {
 		m.detail.View(),
 	)
 
-	footer := components.NewFooter(m.width, m.activPane == PaneDetail)
+	var bottomBar string
+	if m.filtering || m.filterInput.Value() != "" {
+		// Show active/persisted filter input in the bottom bar area.
+		bottomBar = lipgloss.NewStyle().
+			Padding(0, 1).
+			Width(m.width).
+			Render(m.filterInput.View())
+	} else {
+		footer := components.NewFooter(m.width, m.activPane == PaneDetail)
+		bottomBar = footer.View()
+	}
+
 	divider := components.Divider(m.width)
 
-	return lipgloss.JoinVertical(
+	ui := lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
 		body,
 		divider,
-		footer.View(),
+		bottomBar,
 	)
+
+	if m.showHelp {
+		helpModal := components.NewHelp(m.width, m.height).View()
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, helpModal)
+	}
+
+	return ui
 }
