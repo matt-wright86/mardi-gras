@@ -112,6 +112,28 @@ var (
 	DepNonBlocking = lipgloss.NewStyle().
 			Foreground(Muted)
 
+	// Due date badges
+	OverdueBadge = lipgloss.NewStyle().
+			Foreground(StatusStalled).
+			Bold(true)
+
+	DueSoonBadge = lipgloss.NewStyle().
+			Foreground(PrioP1) // orange
+
+	DeferredStyle = lipgloss.NewStyle().
+			Foreground(Dim)
+
+	// Rich dependency styles
+	DepRelated = lipgloss.NewStyle().
+			Foreground(BrightPurple)
+
+	DepDuplicates = lipgloss.NewStyle().
+			Foreground(Muted).
+			Italic(true)
+
+	DepSupersedes = lipgloss.NewStyle().
+			Foreground(BrightGold)
+
 	AgentBadge  = lipgloss.NewStyle().Foreground(StatusAgent).Bold(true)
 	ConvoyBadge = lipgloss.NewStyle().Foreground(StatusConvoy).Bold(true)
 	GasTownTag  = lipgloss.NewStyle().Foreground(BrightPurple).Italic(true)

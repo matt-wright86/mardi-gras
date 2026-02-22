@@ -30,7 +30,7 @@ func TestStatusLineFormat(t *testing.T) {
 	}
 
 	// Verify correct counts
-	for _, want := range []string{"2" + ui.SymRolling, "6" + ui.SymLinedUp, "3" + ui.SymStalled, "3" + ui.SymPassed} {
+	for _, want := range []string{"3" + ui.SymRolling, "12" + ui.SymLinedUp, "3" + ui.SymStalled, "3" + ui.SymPassed} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing count %q in: %s", want, got)
 		}

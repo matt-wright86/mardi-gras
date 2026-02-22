@@ -35,6 +35,16 @@ const (
 	SymSelected    = "◉"
 	SymUnselected  = "○"
 
+	// Due dates
+	SymOverdue  = "▲"
+	SymDeferred = "⏸"
+	SymDueDate  = "◷"
+
+	// Rich dependency types
+	SymRelated    = "↔"
+	SymDuplicates = "⊜"
+	SymSupersedes = "⇢"
+
 	// Section borders (rounded)
 	BoxTopLeft     = "╭"
 	BoxTopRight    = "╮"

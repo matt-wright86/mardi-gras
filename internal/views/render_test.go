@@ -327,6 +327,186 @@ func TestDetailRenderContentDependencies(t *testing.T) {
 	}
 }
 
+func TestRenderIssueDueBadge(t *testing.T) {
+	issues := []data.Issue{
+		testIssue("due-1", data.StatusOpen),
+	}
+	// Set due in 2 days — should show SymDueDate badge
+	due := time.Now().Add(2 * 24 * time.Hour)
+	issues[0].DueAt = &due
+
+	p := NewParade(issues, 100, 20, data.DefaultBlockingTypes)
+	var item ParadeItem
+	for _, it := range p.Items {
+		if it.Issue != nil {
+			item = it
+			break
+		}
+	}
+	if item.Issue == nil {
+		t.Fatal("no selectable item found")
+	}
+	out := p.renderIssue(item, false)
+	if !strings.Contains(out, ui.SymDueDate) {
+		t.Fatalf("renderIssue with upcoming due should contain %q, got: %s", ui.SymDueDate, out)
+	}
+}
+
+func TestRenderIssueOverdueBadge(t *testing.T) {
+	issues := []data.Issue{
+		testIssue("overdue-1", data.StatusOpen),
+	}
+	past := time.Now().Add(-3 * 24 * time.Hour)
+	issues[0].DueAt = &past
+
+	p := NewParade(issues, 100, 20, data.DefaultBlockingTypes)
+	var item ParadeItem
+	for _, it := range p.Items {
+		if it.Issue != nil {
+			item = it
+			break
+		}
+	}
+	if item.Issue == nil {
+		t.Fatal("no selectable item found")
+	}
+	out := p.renderIssue(item, false)
+	if !strings.Contains(out, ui.SymOverdue) {
+		t.Fatalf("renderIssue with overdue should contain %q, got: %s", ui.SymOverdue, out)
+	}
+}
+
+func TestRenderIssueDeferredDim(t *testing.T) {
+	issues := []data.Issue{
+		testIssue("defer-1", data.StatusOpen),
+	}
+	future := time.Now().Add(5 * 24 * time.Hour)
+	issues[0].DeferUntil = &future
+
+	p := NewParade(issues, 100, 20, data.DefaultBlockingTypes)
+	var item ParadeItem
+	for _, it := range p.Items {
+		if it.Issue != nil {
+			item = it
+			break
+		}
+	}
+	if item.Issue == nil {
+		t.Fatal("no selectable item found")
+	}
+	out := p.renderIssue(item, false)
+	if !strings.Contains(out, ui.SymDeferred) {
+		t.Fatalf("renderIssue with deferred should contain %q, got: %s", ui.SymDeferred, out)
+	}
+}
+
+func TestRenderIssueHierarchicalIndent(t *testing.T) {
+	parent := testIssue("mg-007", data.StatusOpen)
+	child := testIssue("mg-007.1", data.StatusOpen)
+	grandchild := testIssue("mg-007.1.1", data.StatusOpen)
+
+	issues := []data.Issue{parent, child, grandchild}
+	p := NewParade(issues, 100, 30, data.DefaultBlockingTypes)
+
+	// Collect rendered output for child and grandchild
+	for _, it := range p.Items {
+		if it.Issue == nil {
+			continue
+		}
+		out := p.renderIssue(it, false)
+		switch it.Issue.ID {
+		case "mg-007":
+			// Parent should not have extra indent (no leading spaces before sym)
+		case "mg-007.1":
+			// Depth 1 → 2 spaces of indent
+			if !strings.Contains(out, "  "+ui.SymLinedUp) {
+				t.Errorf("child issue should be indented, got: %s", out)
+			}
+		case "mg-007.1.1":
+			// Depth 2 → 4 spaces of indent
+			if !strings.Contains(out, "    "+ui.SymLinedUp) {
+				t.Errorf("grandchild issue should be double-indented, got: %s", out)
+			}
+		}
+	}
+}
+
+func TestDetailRenderContentDueDate(t *testing.T) {
+	iss := testIssue("due-detail-1", data.StatusOpen)
+	due := time.Now().Add(2 * 24 * time.Hour)
+	iss.DueAt = &due
+
+	d := Detail{
+		Width:         80,
+		Height:        40,
+		BlockingTypes: data.DefaultBlockingTypes,
+		Issue:         &iss,
+		IssueMap:      data.BuildIssueMap([]data.Issue{iss}),
+	}
+	out := d.renderContent()
+	if !strings.Contains(out, "Due:") {
+		t.Fatalf("renderContent with DueAt set should contain 'Due:', got: %s", out)
+	}
+	if !strings.Contains(out, ui.SymDueDate) {
+		t.Fatalf("renderContent with upcoming due should contain %q, got: %s", ui.SymDueDate, out)
+	}
+}
+
+func TestDetailRenderContentRichDeps(t *testing.T) {
+	target := testIssue("dep-target", data.StatusOpen)
+	iss := testIssue("rich-dep-1", data.StatusOpen)
+	iss.Dependencies = []data.Dependency{
+		{IssueID: "rich-dep-1", DependsOnID: "dep-target", Type: "related"},
+	}
+
+	allIssues := []data.Issue{target, iss}
+	issueMap := data.BuildIssueMap(allIssues)
+
+	d := Detail{
+		Width:         80,
+		Height:        40,
+		BlockingTypes: data.DefaultBlockingTypes,
+		Issue:         issueMap["rich-dep-1"],
+		IssueMap:      issueMap,
+		AllIssues:     allIssues,
+	}
+	out := d.renderContent()
+	if !strings.Contains(out, ui.SymRelated) {
+		t.Fatalf("renderContent with related dep should contain %q, got: %s", ui.SymRelated, out)
+	}
+	if !strings.Contains(out, "related to") {
+		t.Fatalf("renderContent with related dep should contain 'related to', got: %s", out)
+	}
+}
+
+func TestDepTypeDisplay(t *testing.T) {
+	tests := []struct {
+		depType    string
+		wantSym    string
+		wantVerb   string
+	}{
+		{"related", ui.SymRelated, "related to"},
+		{"duplicates", ui.SymDuplicates, "duplicates"},
+		{"supersedes", ui.SymSupersedes, "supersedes"},
+		{"discovered-from", ui.SymNonBlocking, "discovered from"},
+		{"waits-for", ui.SymStalled, "waits for"},
+		{"parent-child", ui.DepTree, "child of"},
+		{"replies-to", ui.SymNonBlocking, "replies to"},
+		{"unknown-type", ui.SymNonBlocking, "unknown-type"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.depType, func(t *testing.T) {
+			sym, verb, _ := depTypeDisplay(tc.depType)
+			if sym != tc.wantSym {
+				t.Errorf("depTypeDisplay(%q) sym = %q, want %q", tc.depType, sym, tc.wantSym)
+			}
+			if verb != tc.wantVerb {
+				t.Errorf("depTypeDisplay(%q) verb = %q, want %q", tc.depType, verb, tc.wantVerb)
+			}
+		})
+	}
+}
+
 func TestDetailRenderContentOwnerAssignee(t *testing.T) {
 	iss := testIssue("owner-1", data.StatusOpen)
 	iss.Owner = "alice"

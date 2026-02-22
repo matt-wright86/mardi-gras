@@ -137,6 +137,22 @@ func (d *Detail) renderContent() string {
 	// Age
 	lines = append(lines, d.row("Age:", ui.DetailValue.Render(issue.AgeLabel())))
 
+	// Due date
+	if issue.DueAt != nil {
+		dueLabel := issue.DueLabel()
+		if issue.IsOverdue() {
+			dueLabel = ui.OverdueBadge.Render(ui.SymOverdue + " " + dueLabel)
+		} else {
+			dueLabel = ui.DueSoonBadge.Render(ui.SymDueDate + " " + dueLabel)
+		}
+		lines = append(lines, d.row("Due:", dueLabel))
+	}
+
+	// Deferred
+	if issue.IsDeferred() {
+		lines = append(lines, d.row("Deferred:", ui.DeferredStyle.Render(ui.SymDeferred+" "+issue.DeferLabel())))
+	}
+
 	// ID
 	lines = append(lines, d.row("ID:", ui.DetailValue.Render(issue.ID)))
 
@@ -239,8 +255,9 @@ func (d *Detail) renderContent() string {
 			if dep, ok := d.IssueMap[edge.DependsOnID]; ok {
 				title = dep.Title
 			}
-			lines = append(lines, ui.DepNonBlocking.Render(
-				fmt.Sprintf("  %s related %s %s (%s) (type: %s)", ui.SymNonBlocking, ui.DepArrow, edge.DependsOnID, truncate(title, 25), edge.Type),
+			sym, verb, style := depTypeDisplay(edge.Type)
+			lines = append(lines, style.Render(
+				fmt.Sprintf("  %s %s %s %s (%s)", sym, verb, ui.DepArrow, edge.DependsOnID, truncate(title, 25)),
 			))
 		}
 
@@ -288,6 +305,28 @@ func truncate(s string, maxLen int) string {
 		return string(runes[:maxLen])
 	}
 	return string(runes[:maxLen-3]) + "..."
+}
+
+// depTypeDisplay returns a symbol, verb, and style for a non-blocking dependency type.
+func depTypeDisplay(depType string) (symbol string, verb string, style lipgloss.Style) {
+	switch depType {
+	case "related":
+		return ui.SymRelated, "related to", ui.DepRelated
+	case "duplicates":
+		return ui.SymDuplicates, "duplicates", ui.DepDuplicates
+	case "supersedes":
+		return ui.SymSupersedes, "supersedes", ui.DepSupersedes
+	case "discovered-from":
+		return ui.SymNonBlocking, "discovered from", ui.DepNonBlocking
+	case "waits-for":
+		return ui.SymStalled, "waits for", ui.DepBlocked
+	case "parent-child":
+		return ui.DepTree, "child of", ui.DepNonBlocking
+	case "replies-to":
+		return ui.SymNonBlocking, "replies to", ui.DepNonBlocking
+	default:
+		return ui.SymNonBlocking, depType, ui.DepNonBlocking
+	}
 }
 
 func wordWrap(s string, width int) string {

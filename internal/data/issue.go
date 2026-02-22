@@ -2,6 +2,7 @@ package data
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -105,6 +106,8 @@ type Issue struct {
 	Notes              string       `json:"notes,omitempty"`
 	Design             string       `json:"design,omitempty"`
 	AcceptanceCriteria string       `json:"acceptance_criteria,omitempty"`
+	DueAt              *time.Time   `json:"due_at,omitempty"`
+	DeferUntil         *time.Time   `json:"defer_until,omitempty"`
 }
 
 // EvaluateDependencies is the canonical function for classifying all dependency
@@ -247,6 +250,70 @@ func PriorityName(p Priority) string {
 	default:
 		return "Unknown"
 	}
+}
+
+// ParentID returns the parent issue ID based on dot-separated hierarchy.
+// "mg-007.2.1" → "mg-007.2", "mg-007" → "".
+func (i *Issue) ParentID() string {
+	idx := strings.LastIndex(i.ID, ".")
+	if idx < 0 {
+		return ""
+	}
+	return i.ID[:idx]
+}
+
+// NestingDepth returns how many dots appear in the issue ID.
+// "mg-007" → 0, "mg-007.2" → 1, "mg-007.2.1" → 2.
+func (i *Issue) NestingDepth() int {
+	return strings.Count(i.ID, ".")
+}
+
+// IsOverdue returns true if DueAt is set, in the past, and the issue is not closed.
+func (i *Issue) IsOverdue() bool {
+	return i.DueAt != nil && i.Status != StatusClosed && i.DueAt.Before(time.Now())
+}
+
+// IsDeferred returns true if DeferUntil is set and still in the future.
+func (i *Issue) IsDeferred() bool {
+	return i.DeferUntil != nil && i.DeferUntil.After(time.Now())
+}
+
+// DueLabel returns a human-readable due-date label.
+// Overdue: "3d overdue", same day: "due today", future: "2d left".
+func (i *Issue) DueLabel() string {
+	if i.DueAt == nil {
+		return ""
+	}
+	now := time.Now()
+	due := *i.DueAt
+	days := int(due.Sub(now).Hours() / 24)
+
+	switch {
+	case days < -1:
+		return fmt.Sprintf("%dd overdue", -days)
+	case days < 0:
+		// Less than 24h overdue but past due
+		return "due today"
+	case days == 0:
+		return "due today"
+	case days == 1:
+		return "1d left"
+	default:
+		return fmt.Sprintf("%dd left", days)
+	}
+}
+
+// DeferLabel returns a human-readable defer label.
+func (i *Issue) DeferLabel() string {
+	if i.DeferUntil == nil {
+		return ""
+	}
+	now := time.Now()
+	days := int(i.DeferUntil.Sub(now).Hours() / 24)
+	if days <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("deferred %dd", days)
 }
 
 // BuildIssueMap creates a lookup map from a slice of issues.

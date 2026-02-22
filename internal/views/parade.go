@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -410,6 +411,35 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 		}
 	}
 
+	// Hierarchical indent based on dot-separated ID depth
+	depth := issue.NestingDepth()
+	indent := strings.Repeat("  ", depth)
+	indentWidth := depth * 2
+
+	// Due date badge
+	dueBadge := ""
+	dueWidth := 0
+	if issue.IsOverdue() {
+		label := fmt.Sprintf("%s %s", ui.SymOverdue, issue.DueLabel())
+		dueBadge = " " + ui.OverdueBadge.Render(label)
+		dueWidth = lipgloss.Width(dueBadge)
+	} else if issue.DueAt != nil && issue.Status != data.StatusClosed {
+		days := int(issue.DueAt.Sub(time.Now()).Hours() / 24)
+		if days <= 3 {
+			label := fmt.Sprintf("%s %s", ui.SymDueDate, issue.DueLabel())
+			dueBadge = " " + ui.DueSoonBadge.Render(label)
+			dueWidth = lipgloss.Width(dueBadge)
+		}
+	}
+
+	// Deferred badge
+	deferBadge := ""
+	deferWidth := 0
+	if issue.IsDeferred() {
+		deferBadge = " " + ui.DeferredStyle.Render(ui.SymDeferred)
+		deferWidth = 2
+	}
+
 	// Build the "next blocker" hint for stalled issues
 	var rawHint string
 	hintStyle := lipgloss.NewStyle().Foreground(ui.Muted)
@@ -426,7 +456,7 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 	innerWidth := p.Width - 4 // │ + space + content + space + │
 
 	// First, constrain the hint length if the terminal is very narrow
-	maxHint := innerWidth - 16 - agentWidth // Reserve space for sym, ID, prio, agent badge
+	maxHint := innerWidth - 16 - agentWidth - indentWidth - dueWidth - deferWidth
 	if maxHint < 0 {
 		maxHint = 0
 	}
@@ -443,22 +473,29 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 	}
 
 	hintLen := lipgloss.Width(hint)
-	maxTitle := innerWidth - 16 - hintLen - agentWidth - changeWidth - selectWidth
+	maxTitle := innerWidth - 16 - hintLen - agentWidth - changeWidth - selectWidth - indentWidth - dueWidth - deferWidth
 	if maxTitle < 0 {
 		maxTitle = 0
 	}
 	title := truncate(issue.Title, maxTitle)
 
-	line := fmt.Sprintf("%s %s%s%s%s %s %s",
+	// Apply dim styling to deferred issue titles
+	titleStyle := lipgloss.NewStyle()
+	if issue.IsDeferred() {
+		titleStyle = ui.DeferredStyle
+	}
+
+	line := fmt.Sprintf("%s%s %s%s%s%s %s %s",
+		indent,
 		symStyle.Render(sym),
 		selectPrefix,
 		changePrefix,
 		agentPrefix,
 		issue.ID,
-		title,
+		titleStyle.Render(title),
 		prioStyle.Render(prio),
 	)
-	line += hint
+	line += dueBadge + deferBadge + hint
 
 	leftBorder := borderStyle.Render(ui.BoxVertical)
 	rightBorder := borderStyle.Render(ui.BoxVertical)

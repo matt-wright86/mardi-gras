@@ -14,8 +14,8 @@ func TestLoadSampleIssues(t *testing.T) {
 		t.Fatalf("LoadIssues: %v", err)
 	}
 
-	if len(issues) != 14 {
-		t.Fatalf("expected 14 issues, got %d", len(issues))
+	if len(issues) != 21 {
+		t.Fatalf("expected 21 issues, got %d", len(issues))
 	}
 
 	// Verify sorting: active issues come first
@@ -46,16 +46,16 @@ func TestGroupByParade(t *testing.T) {
 	stalled := groups[ParadeStalled]
 	passed := groups[ParadePastTheStand]
 
-	if len(rolling) != 2 {
-		t.Errorf("expected 2 rolling, got %d: %v", len(rolling), issueIDs(rolling))
+	if len(rolling) != 3 {
+		t.Errorf("expected 3 rolling, got %d: %v", len(rolling), issueIDs(rolling))
 	}
 	// mg-006 (open, blocked by mg-001), mg-011 (dangling dep), mg-012 (in_progress, blocked)
 	if len(stalled) != 3 {
 		t.Errorf("expected 3 stalled, got %d: %v", len(stalled), issueIDs(stalled))
 	}
-	// mg-013 (resolved dep) + mg-014 (non-blocking dep) join original 4
-	if len(linedUp) != 6 {
-		t.Errorf("expected 6 lined up, got %d: %v", len(linedUp), issueIDs(linedUp))
+	// Original 6 + mg-015, mg-016, mg-017, mg-007.1, mg-007.2.1, mg-018
+	if len(linedUp) != 12 {
+		t.Errorf("expected 12 lined up, got %d: %v", len(linedUp), issueIDs(linedUp))
 	}
 	if len(passed) != 3 {
 		t.Errorf("expected 3 past the stand, got %d: %v", len(passed), issueIDs(passed))
