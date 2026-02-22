@@ -56,6 +56,7 @@ func (h Help) View() string {
 				{key: "enter", desc: "Focus detail pane"},
 				{key: "c", desc: "Toggle closed issues"},
 				{key: "/", desc: "Enter filter mode"},
+				{key: "a", desc: "Launch Claude agent"},
 			},
 		},
 		{
@@ -64,6 +65,7 @@ func (h Help) View() string {
 				{key: "j / k", desc: "Scroll up/down"},
 				{key: "esc", desc: "Back to parade pane"},
 				{key: "/", desc: "Enter filter mode"},
+				{key: "a", desc: "Launch Claude agent"},
 			},
 		},
 		{

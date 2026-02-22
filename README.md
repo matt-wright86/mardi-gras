@@ -7,27 +7,7 @@ Mardi Gras is a terminal UI for [Beads](https://github.com/steveyegge/beads) tha
 It's fast, visual, and joyful.
 One binary. No config. Just `mg`.
 
-```
-⚜ MARDI GRAS ⚜                 2 rolling | 3 lined up | 1 stalled | 10 total
-●─◆─●─◆─●─◆─●─◆─●─◆─●─◆─●─◆─●─◆─●─◆─●─◆─●─◆─●─◆─●─◆─●─◆─●─◆─●─◆─●─◆─●─◆
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┯━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- ROLLING ●                      │  Deploy authentication service
-  > ● vv-001 Deploy auth    P0  │
-    ● vv-002 Fix CI pipeline P1 │  Status:   ● Rolling (in_progress)
-                                │  Type:     feature
- LINED UP ♪                     │  Priority: P0 (Critical)
-    ♪ vv-003 Add monitoring  P2 │  Owner:    dev@example.com
-    ♪ vv-004 Update docs     P3 │  Age:      3 days
-    ♪ vv-005 Refactor utils  P4 │
-                                │  DEPENDENCIES
- STALLED ⊘                      │  ● blocks → vv-006 (Write tests for...)
-    ⊘ vv-006 Write tests     P2 │
-                                │
- ▶ PAST THE STAND (4 issues)    │
-   [press c to expand]          │
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-issues.jsonl (auto) · 2s ago              / filter  j/k navigate  tab pane  q quit
-```
+![Mardi Gras TUI](docs/screenshots/mardi-gras.png)
 
 Think of your project as a parade route:
 
@@ -103,6 +83,7 @@ Mardi Gras polls your JSONL file on a short interval. No OS-specific file watche
 | `enter`   | Apply filter (in filter mode) / Focus detail pane                        |
 | `tab`     | Switch between parade and detail panes                                   |
 | `c`       | Toggle closed issues                                                     |
+| `a`       | Launch Claude Code agent on selected issue                               |
 | `g` / `G` | Jump to top / bottom                                                     |
 | `q`       | Quit (or close help overlay if open)                                     |
 | `ctrl+c`  | Quit (global)                                                            |
@@ -176,6 +157,16 @@ bind m display-popup -E -w 80% -h 75% -d "#{pane_current_path}" "mg"
 - `-w 80% -h 75%` sizes the popup relative to the terminal
 - `-d "#{pane_current_path}"` preserves the working directory so `mg` auto-detects the right `.beads/issues.jsonl`
 
+## Claude Code Integration
+
+Press `a` on any selected issue to launch an interactive [Claude Code](https://claude.com/claude-code) session pre-loaded with the full issue context: title, description, notes, acceptance criteria, and dependency status.
+
+The TUI suspends while Claude runs (using BubbleTea's `tea.ExecProcess`), giving Claude the full terminal. When you exit the Claude session, Mardi Gras resumes and reloads the JSONL to pick up any changes Claude made.
+
+- Requires `claude` on your `PATH`
+- If `claude` is not installed, the `a` key silently does nothing
+- The prompt includes `bd update` and `bd close` hints so Claude knows how to manage the issue lifecycle
+
 ## Built with
 
 - [BubbleTea](https://github.com/charmbracelet/bubbletea) — Elm Architecture for the terminal
@@ -204,7 +195,6 @@ It is a visual lens on top of Beads. Beads remains the source of truth.
 
 - Color themes (Catppuccin, Dracula)
 - Dependency graph view (ASCII DAG)
-- Claude Code agent launch from a task
 - Bead throw celebration animation on task close
 
 No promises. Just dreams. PRs welcome.

@@ -1,12 +1,14 @@
 package app
 
 import (
+	"path/filepath"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/matt-wright86/mardi-gras/internal/agent"
 	"github.com/matt-wright86/mardi-gras/internal/components"
 	"github.com/matt-wright86/mardi-gras/internal/data"
 	"github.com/matt-wright86/mardi-gras/internal/ui"
@@ -39,6 +41,8 @@ type Model struct {
 	filtering     bool
 	showHelp      bool
 	ready         bool
+	claudeAvail   bool
+	projectDir    string
 }
 
 // New creates a new app model from loaded issues.
@@ -57,6 +61,12 @@ func New(issues []data.Issue, watchPath string, pathExplicit bool, blockingTypes
 	ti.Cursor.Style = ui.InputCursor
 	ti.Width = 50
 
+	// Derive project root by stripping .beads/issues.jsonl from the watch path.
+	projectDir := ""
+	if watchPath != "" {
+		projectDir = filepath.Dir(filepath.Dir(watchPath))
+	}
+
 	return Model{
 		issues:        issues,
 		groups:        groups,
@@ -66,6 +76,8 @@ func New(issues []data.Issue, watchPath string, pathExplicit bool, blockingTypes
 		lastFileMod:   lastFileMod,
 		blockingTypes: blockingTypes,
 		filterInput:   ti,
+		claudeAvail:   agent.Available(),
+		projectDir:    projectDir,
 	}
 }
 
@@ -73,6 +85,9 @@ func New(issues []data.Issue, watchPath string, pathExplicit bool, blockingTypes
 func (m Model) Init() tea.Cmd {
 	return data.WatchFile(m.watchPath, m.lastFileMod)
 }
+
+// agentFinishedMsg is sent when a launched claude session exits.
+type agentFinishedMsg struct{ err error }
 
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -112,6 +127,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, data.WatchFile(m.watchPath, m.lastFileMod)
 
 	case data.FileWatchErrorMsg:
+		return m, data.WatchFile(m.watchPath, m.lastFileMod)
+
+	case agentFinishedMsg:
+		// Reset lastFileMod to force reload on next poll cycle.
+		m.lastFileMod = time.Time{}
 		return m, data.WatchFile(m.watchPath, m.lastFileMod)
 	}
 
@@ -200,6 +220,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.parade.ToggleClosed()
 		m.syncSelection()
 		return m, nil
+
+	case "a":
+		issue := m.parade.SelectedIssue
+		if issue == nil || !m.claudeAvail {
+			return m, nil
+		}
+		deps := issue.EvaluateDependencies(m.detail.IssueMap, m.blockingTypes)
+		prompt := agent.BuildPrompt(*issue, deps, m.detail.IssueMap)
+		c := agent.Command(prompt, m.projectDir)
+		return m, tea.ExecProcess(c, func(err error) tea.Msg {
+			return agentFinishedMsg{err: err}
+		})
 	}
 
 	// Navigation keys depend on active pane
