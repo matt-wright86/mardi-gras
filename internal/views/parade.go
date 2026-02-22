@@ -55,6 +55,7 @@ type Parade struct {
 	SelectedIssue *data.Issue
 	ActiveAgents  map[string]string // issueID -> tmux window name
 	TownStatus    *gastown.TownStatus
+	ChangedIDs    map[string]bool // recently changed issues (change indicator dot)
 }
 
 // NewParade creates a parade view from a set of issues.
@@ -321,6 +322,14 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 	prioStyle := ui.BadgePriority.Foreground(ui.PriorityColor(int(issue.Priority)))
 	symStyle := lipgloss.NewStyle().Foreground(statusColor(issue, p.issueMap, p.blockingTypes))
 
+	// Change indicator dot
+	changePrefix := ""
+	changeWidth := 0
+	if p.ChangedIDs != nil && p.ChangedIDs[issue.ID] {
+		changePrefix = lipgloss.NewStyle().Foreground(ui.BrightGold).Render(ui.SymChanged) + " "
+		changeWidth = 2
+	}
+
 	// Agent badge prefix
 	agentPrefix := ""
 	agentWidth := 0
@@ -377,14 +386,15 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 	}
 
 	hintLen := lipgloss.Width(hint)
-	maxTitle := innerWidth - 16 - hintLen - agentWidth
+	maxTitle := innerWidth - 16 - hintLen - agentWidth - changeWidth
 	if maxTitle < 0 {
 		maxTitle = 0
 	}
 	title := truncate(issue.Title, maxTitle)
 
-	line := fmt.Sprintf("%s %s%s %s %s",
+	line := fmt.Sprintf("%s %s%s%s %s %s",
 		symStyle.Render(sym),
+		changePrefix,
 		agentPrefix,
 		issue.ID,
 		title,

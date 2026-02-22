@@ -31,6 +31,7 @@ const (
 	SymConvoy      = "◐"
 	SymMail        = "✉"
 	SymSling       = "➤"
+	SymChanged     = "◈"
 
 	// Section borders (rounded)
 	BoxTopLeft     = "╭"

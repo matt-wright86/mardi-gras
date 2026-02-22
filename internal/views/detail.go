@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/matt-wright86/mardi-gras/internal/data"
 	"github.com/matt-wright86/mardi-gras/internal/gastown"
@@ -71,6 +72,26 @@ func (d *Detail) View() string {
 	return ui.DetailBorder.Height(d.Height).Render(content)
 }
 
+// renderMarkdown renders markdown text using glamour with dark theme.
+func (d *Detail) renderMarkdown(text string) string {
+	contentWidth := d.Width - 6
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
+	r, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(contentWidth),
+	)
+	if err != nil {
+		return wordWrap(text, d.Width-4)
+	}
+	rendered, err := r.Render(text)
+	if err != nil {
+		return wordWrap(text, d.Width-4)
+	}
+	return strings.TrimRight(rendered, "\n")
+}
+
 func (d *Detail) renderContent() string {
 	issue := d.Issue
 	if issue == nil {
@@ -124,7 +145,6 @@ func (d *Detail) renderContent() string {
 		if _, active := d.ActiveAgents[issue.ID]; active {
 			agentStyle := lipgloss.NewStyle().Foreground(ui.StatusAgent).Bold(true)
 			if d.TownStatus != nil {
-				// Gas Town mode: richer info
 				if a := d.TownStatus.AgentForIssue(issue.ID); a != nil {
 					lines = append(lines, d.row("Worker:", agentStyle.Render(
 						fmt.Sprintf("%s %s (%s)", ui.SymAgent, a.Name, a.Role),
@@ -138,7 +158,6 @@ func (d *Detail) renderContent() string {
 					)))
 				}
 			} else {
-				// Tmux-only mode: show pane-based info
 				lines = append(lines, d.row("Agent:", agentStyle.Render(
 					fmt.Sprintf("%s active", ui.SymAgent),
 				)))
@@ -146,32 +165,42 @@ func (d *Detail) renderContent() string {
 		}
 	}
 
-	// Description
+	// Description (markdown rendered)
 	if issue.Description != "" {
 		lines = append(lines, "")
 		lines = append(lines, ui.DetailSection.Render("DESCRIPTION"))
-		// Word-wrap description to panel width
-		wrapped := wordWrap(issue.Description, d.Width-4)
-		lines = append(lines, ui.DetailValue.Render(wrapped))
+		lines = append(lines, d.renderMarkdown(issue.Description))
 	}
 
 	// Close reason
 	if issue.CloseReason != "" {
 		lines = append(lines, "")
 		lines = append(lines, ui.DetailSection.Render("CLOSE REASON"))
-		wrapped := wordWrap(issue.CloseReason, d.Width-4)
-		lines = append(lines, ui.DetailValue.Render(wrapped))
+		lines = append(lines, d.renderMarkdown(issue.CloseReason))
 	}
 
-	// Notes
+	// Notes (markdown rendered)
 	if issue.Notes != "" {
 		lines = append(lines, "")
 		lines = append(lines, ui.DetailSection.Render("NOTES"))
-		wrapped := wordWrap(issue.Notes, d.Width-4)
-		lines = append(lines, ui.DetailValue.Render(wrapped))
+		lines = append(lines, d.renderMarkdown(issue.Notes))
 	}
 
-	// Dependencies — use EvaluateDependencies for full classification
+	// Acceptance Criteria (markdown rendered)
+	if issue.AcceptanceCriteria != "" {
+		lines = append(lines, "")
+		lines = append(lines, ui.DetailSection.Render("ACCEPTANCE CRITERIA"))
+		lines = append(lines, d.renderMarkdown(issue.AcceptanceCriteria))
+	}
+
+	// Design (markdown rendered)
+	if issue.Design != "" {
+		lines = append(lines, "")
+		lines = append(lines, ui.DetailSection.Render("DESIGN"))
+		lines = append(lines, d.renderMarkdown(issue.Design))
+	}
+
+	// Dependencies
 	eval := issue.EvaluateDependencies(d.IssueMap, bt)
 	blocks := issue.BlocksIDs(d.AllIssues, bt)
 	hasDeps := len(eval.Edges) > 0 || len(blocks) > 0
@@ -179,7 +208,6 @@ func (d *Detail) renderContent() string {
 		lines = append(lines, "")
 		lines = append(lines, ui.DetailSection.Render("DEPENDENCIES"))
 
-		// Blocking (unresolved)
 		for _, id := range eval.BlockingIDs {
 			title := id
 			if dep, ok := d.IssueMap[id]; ok {
@@ -190,14 +218,12 @@ func (d *Detail) renderContent() string {
 			))
 		}
 
-		// Missing (dangling ref)
 		for _, id := range eval.MissingIDs {
 			lines = append(lines, ui.DepMissing.Render(
 				fmt.Sprintf("  %s missing %s %s (not found)", ui.SymMissing, ui.DepArrow, id),
 			))
 		}
 
-		// Resolved (closed blockers) — dimmed
 		for _, id := range eval.ResolvedIDs {
 			title := id
 			if dep, ok := d.IssueMap[id]; ok {
@@ -208,7 +234,6 @@ func (d *Detail) renderContent() string {
 			))
 		}
 
-		// Non-blocking (other dep types)
 		for _, edge := range eval.NonBlocking {
 			title := edge.DependsOnID
 			if dep, ok := d.IssueMap[edge.DependsOnID]; ok {
@@ -219,7 +244,6 @@ func (d *Detail) renderContent() string {
 			))
 		}
 
-		// Reverse: what this issue blocks
 		for _, id := range blocks {
 			title := id
 			if dep, ok := d.IssueMap[id]; ok {

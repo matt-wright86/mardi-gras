@@ -162,4 +162,28 @@ var (
 	HelpHint = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#8E94A6")).
 			Align(lipgloss.Center)
+
+	// Toast notifications
+	ToastInfo = lipgloss.NewStyle().
+			Foreground(Light).
+			Background(DimPurple).
+			Padding(0, 1)
+
+	ToastSuccess = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#1A1A1A")).
+			Background(BrightGreen).
+			Bold(true).
+			Padding(0, 1)
+
+	ToastWarn = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#1A1A1A")).
+			Background(BrightGold).
+			Bold(true).
+			Padding(0, 1)
+
+	ToastError = lipgloss.NewStyle().
+			Foreground(White).
+			Background(lipgloss.Color("#E74C3C")).
+			Bold(true).
+			Padding(0, 1)
 )

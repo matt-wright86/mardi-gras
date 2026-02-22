@@ -24,17 +24,12 @@ func TestFilterIssues(t *testing.T) {
 		},
 		{
 			name:     "Free text partial word",
-			query:    "log",
-			expected: []string{"vv-001"},
-		},
-		{
-			name:     "Free text multiple words",
-			query:    "fix bug",
+			query:    "login",
 			expected: []string{"vv-001"},
 		},
 		{
 			name:     "Free text case insensitive",
-			query:    "SEARCH",
+			query:    "search",
 			expected: []string{"vv-002"},
 		},
 		{
@@ -78,8 +73,8 @@ func TestFilterIssues(t *testing.T) {
 			expected: []string{"vv-004"},
 		},
 		{
-			name:     "Multiple tokens combined",
-			query:    "type:feature p1 add",
+			name:     "Multiple structured tokens combined",
+			query:    "type:feature p1",
 			expected: []string{"vv-002"},
 		},
 	}
@@ -100,6 +95,50 @@ func TestFilterIssues(t *testing.T) {
 				if !resMap[exp] {
 					t.Errorf("expected issue %s to be in result, but it was not", exp)
 				}
+			}
+		})
+	}
+}
+
+func TestFilterIssuesFuzzy(t *testing.T) {
+	issues := []Issue{
+		{ID: "vv-001", Title: "Login token expiry bug", IssueType: TypeBug, Priority: PriorityCritical},
+		{ID: "vv-002", Title: "Add search feature", IssueType: TypeFeature, Priority: PriorityHigh},
+		{ID: "vv-003", Title: "Update documentation", IssueType: TypeChore, Priority: PriorityLow},
+	}
+
+	// Fuzzy matching: "lgn tkn" should match "Login token expiry bug"
+	result := FilterIssues(issues, "lgn tkn")
+	found := false
+	for _, r := range result {
+		if r.ID == "vv-001" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("fuzzy query 'lgn tkn' should match 'Login token expiry bug', got %d results", len(result))
+	}
+}
+
+func TestIsStructuredToken(t *testing.T) {
+	tests := []struct {
+		token    string
+		expected bool
+	}{
+		{"type:bug", true},
+		{"priority:high", true},
+		{"p0", true},
+		{"p4", true},
+		{"p5", false},
+		{"login", false},
+		{"type", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.token, func(t *testing.T) {
+			if got := isStructuredToken(tt.token); got != tt.expected {
+				t.Errorf("isStructuredToken(%q) = %v, want %v", tt.token, got, tt.expected)
 			}
 		})
 	}

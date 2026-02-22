@@ -2,11 +2,13 @@ package data
 
 import (
 	"strings"
+
+	"github.com/sahilm/fuzzy"
 )
 
 // FilterIssues returns a new slice of issues that match the search query.
-// It supports explicit tokens (type:bug, p1, priority:high) and free-text search on ID and Title.
-// All tokens in the query must match (AND logic) for an issue to be included.
+// It supports explicit tokens (type:bug, p1, priority:high) and fuzzy free-text
+// search on ID and Title. All tokens in the query must match (AND logic).
 func FilterIssues(issues []Issue, query string) []Issue {
 	query = strings.TrimSpace(query)
 	if query == "" {
@@ -14,24 +16,52 @@ func FilterIssues(issues []Issue, query string) []Issue {
 	}
 
 	rawTokens := strings.Fields(query)
-	var tokens []string
-	for _, t := range rawTokens {
-		tokens = append(tokens, strings.ToLower(t))
-	}
+	var structuredTokens []string
+	var freeTokens []string
 
-	var filtered []Issue
-	for _, issue := range issues {
-		if matchesAllTokens(issue, tokens) {
-			filtered = append(filtered, issue)
+	for _, t := range rawTokens {
+		lower := strings.ToLower(t)
+		if isStructuredToken(lower) {
+			structuredTokens = append(structuredTokens, lower)
+		} else {
+			freeTokens = append(freeTokens, lower)
 		}
 	}
 
-	return filtered
+	// First pass: structured token filtering (exact match)
+	candidates := issues
+	if len(structuredTokens) > 0 {
+		var filtered []Issue
+		for _, issue := range candidates {
+			if matchesStructuredTokens(issue, structuredTokens) {
+				filtered = append(filtered, issue)
+			}
+		}
+		candidates = filtered
+	}
+
+	// Second pass: fuzzy match on combined free tokens
+	if len(freeTokens) > 0 {
+		freeQuery := strings.Join(freeTokens, " ")
+		candidates = fuzzyFilter(candidates, freeQuery)
+	}
+
+	return candidates
 }
 
-func matchesAllTokens(issue Issue, tokens []string) bool {
-	issueTitle := strings.ToLower(issue.Title)
-	issueID := strings.ToLower(issue.ID)
+// isStructuredToken returns true for tokens with explicit prefixes or priority shorthands.
+func isStructuredToken(token string) bool {
+	if strings.HasPrefix(token, "type:") || strings.HasPrefix(token, "priority:") {
+		return true
+	}
+	// Priority shorthands: p0, p1, p2, p3, p4
+	if len(token) == 2 && token[0] == 'p' && token[1] >= '0' && token[1] <= '4' {
+		return true
+	}
+	return false
+}
+
+func matchesStructuredTokens(issue Issue, tokens []string) bool {
 	issueType := strings.ToLower(string(issue.IssueType))
 	issuePriorityLevel := issue.Priority
 	issuePriorityName := strings.ToLower(PriorityName(issue.Priority))
@@ -42,12 +72,10 @@ func matchesAllTokens(issue Issue, tokens []string) bool {
 
 		switch {
 		case strings.HasPrefix(token, "type:"):
-			// 1. Check explicit 'type:' tokens
 			val := strings.TrimPrefix(token, "type:")
 			matched = issueType == val
 
 		case strings.HasPrefix(token, "priority:"):
-			// 2. Check explicit 'priority:' tokens
 			val := strings.TrimPrefix(token, "priority:")
 			switch {
 			case val == issuePriorityName:
@@ -65,19 +93,43 @@ func matchesAllTokens(issue Issue, tokens []string) bool {
 			}
 
 		case token == issuePriorityLabel:
-			// 3. Check shorthand priority (p0, p1, etc)
 			matched = true
-
-		default:
-			// 4. Free-text search on ID and Title
-			matched = strings.Contains(issueID, token) || strings.Contains(issueTitle, token)
 		}
 
-		// If any token fails to match, the whole issue fails
 		if !matched {
 			return false
 		}
 	}
 
 	return true
+}
+
+// issueSearchSource implements fuzzy.Source for issue searching.
+type issueSearchSource struct {
+	issues []Issue
+}
+
+func (s issueSearchSource) String(i int) string {
+	issue := s.issues[i]
+	return issue.ID + " " + issue.Title
+}
+
+func (s issueSearchSource) Len() int {
+	return len(s.issues)
+}
+
+// fuzzyFilter applies fuzzy matching on issue ID + Title.
+func fuzzyFilter(issues []Issue, query string) []Issue {
+	if len(issues) == 0 {
+		return nil
+	}
+
+	src := issueSearchSource{issues: issues}
+	matches := fuzzy.FindFrom(query, src)
+
+	result := make([]Issue, 0, len(matches))
+	for _, match := range matches {
+		result = append(result, issues[match.Index])
+	}
+	return result
 }

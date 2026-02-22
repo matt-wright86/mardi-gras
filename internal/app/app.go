@@ -1,9 +1,12 @@
 package app
 
 import (
+	"fmt"
+	"os/exec"
 	"path/filepath"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -22,6 +25,11 @@ type Pane int
 const (
 	PaneParade Pane = iota
 	PaneDetail
+)
+
+const (
+	toastDuration           = 4 * time.Second
+	changeIndicatorDuration = 30 * time.Second
 )
 
 // Model is the root BubbleTea model.
@@ -48,6 +56,17 @@ type Model struct {
 	activeAgents  map[string]string   // issueID -> tmux window name
 	gtEnv         gastown.Env         // Gas Town environment, read once at startup
 	townStatus    *gastown.TownStatus // Latest gt status, nil when unavailable
+
+	// Toast notification
+	toast components.Toast
+
+	// Confetti animation
+	confetti Confetti
+
+	// Change indicators: track recently changed issue IDs
+	changedIDs   map[string]bool
+	changedAt    time.Time
+	prevIssueMap map[string]data.Status // issueID -> previous status for diffing
 }
 
 // New creates a new app model from loaded issues.
@@ -61,7 +80,7 @@ func New(issues []data.Issue, watchPath string, pathExplicit bool, blockingTypes
 	}
 	ti := textinput.New()
 	ti.Prompt = ui.InputPrompt.Render("/ ")
-	ti.Placeholder = "Filter type:bug, p1, deployment..."
+	ti.Placeholder = "Filter type:bug, p1, or fuzzy text..."
 	ti.TextStyle = ui.InputText
 	ti.Cursor.Style = ui.InputCursor
 	ti.Width = 50
@@ -70,6 +89,12 @@ func New(issues []data.Issue, watchPath string, pathExplicit bool, blockingTypes
 	projectDir := ""
 	if watchPath != "" {
 		projectDir = filepath.Dir(filepath.Dir(watchPath))
+	}
+
+	// Build initial status snapshot for change detection
+	prevMap := make(map[string]data.Status, len(issues))
+	for _, iss := range issues {
+		prevMap[iss.ID] = iss.Status
 	}
 
 	return Model{
@@ -86,6 +111,8 @@ func New(issues []data.Issue, watchPath string, pathExplicit bool, blockingTypes
 		inTmux:        agent.InTmux() && agent.TmuxAvailable(),
 		activeAgents:  make(map[string]string),
 		gtEnv:         gastown.Detect(),
+		changedIDs:    make(map[string]bool),
+		prevIssueMap:  prevMap,
 	}
 }
 
@@ -124,6 +151,16 @@ type slingResultMsg struct {
 	err     error
 }
 
+// mutateResultMsg is sent when a bd CLI mutation completes.
+type mutateResultMsg struct {
+	issueID string
+	action  string
+	err     error
+}
+
+// changeIndicatorExpiredMsg clears change indicators after timeout.
+type changeIndicatorExpiredMsg struct{}
+
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -147,13 +184,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case data.FileChangedMsg:
+		cmds := []tea.Cmd{
+			data.WatchFile(m.watchPath, m.lastFileMod),
+			pollAgentState(m.gtEnv, m.inTmux),
+		}
+
+		// Diff against previous state for change indicators
+		changes := m.diffIssues(msg.Issues)
+		if changes > 0 {
+			m.changedAt = time.Now()
+			toast, toastCmd := components.ShowToast(
+				fmt.Sprintf("File reloaded \u2014 %d issue%s changed", changes, plural(changes)),
+				components.ToastInfo, toastDuration,
+			)
+			m.toast = toast
+			cmds = append(cmds, toastCmd)
+			cmds = append(cmds, tea.Tick(changeIndicatorDuration, func(time.Time) tea.Msg {
+				return changeIndicatorExpiredMsg{}
+			}))
+		}
+
+		// Update snapshot for next diff
+		m.prevIssueMap = make(map[string]data.Status, len(msg.Issues))
+		for _, iss := range msg.Issues {
+			m.prevIssueMap[iss.ID] = iss.Status
+		}
+
 		m.issues = msg.Issues
 		m.groups = data.GroupByParade(msg.Issues, m.blockingTypes)
 		if !msg.LastMod.IsZero() {
 			m.lastFileMod = msg.LastMod
 		}
 		m.rebuildParade()
-		return m, tea.Batch(data.WatchFile(m.watchPath, m.lastFileMod), pollAgentState(m.gtEnv, m.inTmux))
+		return m, tea.Batch(cmds...)
 
 	case data.FileUnchangedMsg:
 		if !msg.LastMod.IsZero() {
@@ -167,10 +230,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case agentLaunchedMsg:
 		m.activeAgents[msg.issueID] = msg.windowName
 		m.propagateAgentState()
-		return m, nil
+		toast, cmd := components.ShowToast(
+			fmt.Sprintf("Agent launched for %s", msg.issueID),
+			components.ToastSuccess, toastDuration,
+		)
+		m.toast = toast
+		return m, cmd
 
 	case agentLaunchErrorMsg:
-		return m, nil
+		toast, cmd := components.ShowToast(
+			fmt.Sprintf("Agent launch failed: %s", msg.err),
+			components.ToastError, toastDuration,
+		)
+		m.toast = toast
+		return m, cmd
 
 	case agentStatusMsg:
 		m.activeAgents = msg.activeAgents
@@ -186,7 +259,59 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case slingResultMsg:
-		// Sling completed (success or failure). Next poll will pick up the new agent.
+		if msg.err != nil {
+			toast, cmd := components.ShowToast(
+				fmt.Sprintf("Sling failed for %s: %s", msg.issueID, msg.err),
+				components.ToastError, toastDuration,
+			)
+			m.toast = toast
+			return m, cmd
+		}
+		toast, cmd := components.ShowToast(
+			fmt.Sprintf("Slung %s to polecat", msg.issueID),
+			components.ToastSuccess, toastDuration,
+		)
+		m.toast = toast
+		return m, cmd
+
+	case mutateResultMsg:
+		if msg.err != nil {
+			toast, cmd := components.ShowToast(
+				fmt.Sprintf("Failed: %s %s \u2014 %s", msg.action, msg.issueID, msg.err),
+				components.ToastError, toastDuration,
+			)
+			m.toast = toast
+			return m, cmd
+		}
+		toast, toastCmd := components.ShowToast(
+			fmt.Sprintf("%s \u2192 %s", msg.issueID, msg.action),
+			components.ToastSuccess, toastDuration,
+		)
+		m.toast = toast
+		// Force reload on next poll
+		m.lastFileMod = time.Time{}
+		cmds := []tea.Cmd{toastCmd, data.WatchFile(m.watchPath, m.lastFileMod)}
+		// Trigger confetti on close
+		if msg.action == "closed" && m.width > 0 && m.height > 0 {
+			m.confetti = NewConfetti(m.width, m.height)
+			cmds = append(cmds, m.confetti.Tick())
+		}
+		return m, tea.Batch(cmds...)
+
+	case confettiTickMsg:
+		m.confetti.Update()
+		if m.confetti.Active() {
+			return m, m.confetti.Tick()
+		}
+		return m, nil
+
+	case components.ToastDismissMsg:
+		m.toast = components.Toast{}
+		return m, nil
+
+	case changeIndicatorExpiredMsg:
+		m.changedIDs = make(map[string]bool)
+		m.parade.ChangedIDs = nil
 		return m, nil
 
 	case agentFinishedMsg:
@@ -211,7 +336,6 @@ func (m Model) handleHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.showHelp = false
 		return m, nil
 	default:
-		// Ignore all other keys while help is open.
 		return m, nil
 	}
 }
@@ -232,7 +356,6 @@ func (m Model) handleFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		m.filtering = false
 		m.filterInput.Blur()
-		// Keep query applied
 		return m, nil
 	}
 
@@ -281,18 +404,40 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.syncSelection()
 		return m, nil
 
+	// Quick actions: status changes (6.1)
+	case "1":
+		return m.quickAction(data.StatusInProgress, "in_progress")
+	case "2":
+		return m.quickAction(data.StatusOpen, "open")
+	case "3":
+		return m.closeSelectedIssue()
+
+	// Quick actions: priority changes (6.1)
+	case "!": // Shift+1
+		return m.setPriority(data.PriorityHigh)
+	case "@": // Shift+2
+		return m.setPriority(data.PriorityMedium)
+	case "#": // Shift+3
+		return m.setPriority(data.PriorityLow)
+	case "$": // Shift+4
+		return m.setPriority(data.PriorityBacklog)
+
+	// Git branch name copy (5.5)
+	case "b":
+		return m.copyBranchName()
+	case "B":
+		return m.createAndSwitchBranch()
+
 	case "a":
 		issue := m.parade.SelectedIssue
 		if issue == nil || !m.claudeAvail {
 			return m, nil
 		}
-		// If agent already active on this issue, switch to its window
 		if _, active := m.activeAgents[issue.ID]; active && m.inTmux {
 			_ = agent.SelectAgentWindow(issue.ID)
 			return m, nil
 		}
 
-		// Gas Town: use gt sling (auto-convoy, auto-polecat-spawn)
 		if m.gtEnv.Available {
 			issueID := issue.ID
 			return m, func() tea.Msg {
@@ -301,7 +446,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Tmux: split-window dispatch
 		deps := issue.EvaluateDependencies(m.detail.IssueMap, m.blockingTypes)
 		prompt := agent.BuildPrompt(*issue, deps, m.detail.IssueMap)
 
@@ -315,7 +459,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return agentLaunchedMsg{issueID: issueID, windowName: winName}
 			}
 		}
-		// Fallback: suspend TUI (non-tmux)
 		c := agent.Command(prompt, m.projectDir)
 		return m, tea.ExecProcess(c, func(err error) tea.Msg {
 			return agentFinishedMsg{err: err}
@@ -332,7 +475,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		issueID := issue.ID
 		return m, func() tea.Msg {
 			_ = agent.KillAgentWindow(issueID)
-			return agentStatusMsg{activeAgents: make(map[string]string)} // next poll will reconcile
+			return agentStatusMsg{activeAgents: make(map[string]string)}
 		}
 
 	case "s":
@@ -340,7 +483,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if issue == nil || !m.gtEnv.Available {
 			return m, nil
 		}
-		// Sling with the "shiny" formula (full engineer-in-a-box workflow)
 		issueID := issue.ID
 		return m, func() tea.Msg {
 			err := gastown.SlingWithFormula(issueID, "shiny")
@@ -352,9 +494,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if issue == nil || !m.gtEnv.Available {
 			return m, nil
 		}
-		// Nudge the agent working on this issue
 		if agentName, active := m.activeAgents[issue.ID]; active {
 			_ = gastown.Nudge(agentName, "")
+			toast, cmd := components.ShowToast(
+				fmt.Sprintf("Nudged %s", agentName),
+				components.ToastInfo, toastDuration,
+			)
+			m.toast = toast
+			return m, cmd
 		}
 		return m, nil
 	}
@@ -369,7 +516,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.parade.MoveUp()
 			m.syncSelection()
 		case "g":
-			// Go to top
 			m.parade.Cursor = 0
 			m.parade.ScrollOffset = 0
 			for i, item := range m.parade.Items {
@@ -380,7 +526,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.syncSelection()
 		case "G":
-			// Go to bottom
 			for i := len(m.parade.Items) - 1; i >= 0; i-- {
 				if !m.parade.Items[i].IsHeader {
 					m.parade.Cursor = i
@@ -412,6 +557,128 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// quickAction runs bd update to change issue status.
+func (m Model) quickAction(status data.Status, label string) (tea.Model, tea.Cmd) {
+	issue := m.parade.SelectedIssue
+	if issue == nil {
+		return m, nil
+	}
+	if issue.Status == status {
+		return m, nil // already in this status
+	}
+	issueID := issue.ID
+	return m, func() tea.Msg {
+		err := data.SetStatus(issueID, status)
+		return mutateResultMsg{issueID: issueID, action: label, err: err}
+	}
+}
+
+// closeSelectedIssue runs bd close on the selected issue.
+func (m Model) closeSelectedIssue() (tea.Model, tea.Cmd) {
+	issue := m.parade.SelectedIssue
+	if issue == nil {
+		return m, nil
+	}
+	if issue.Status == data.StatusClosed {
+		return m, nil
+	}
+	issueID := issue.ID
+	return m, func() tea.Msg {
+		err := data.CloseIssue(issueID)
+		return mutateResultMsg{issueID: issueID, action: "closed", err: err}
+	}
+}
+
+// setPriority runs bd update to change issue priority.
+func (m Model) setPriority(priority data.Priority) (tea.Model, tea.Cmd) {
+	issue := m.parade.SelectedIssue
+	if issue == nil {
+		return m, nil
+	}
+	if issue.Priority == priority {
+		return m, nil
+	}
+	issueID := issue.ID
+	label := fmt.Sprintf("P%d", priority)
+	return m, func() tea.Msg {
+		err := data.SetPriority(issueID, priority)
+		return mutateResultMsg{issueID: issueID, action: label, err: err}
+	}
+}
+
+// copyBranchName copies a slugified branch name to the clipboard.
+func (m Model) copyBranchName() (tea.Model, tea.Cmd) {
+	issue := m.parade.SelectedIssue
+	if issue == nil {
+		return m, nil
+	}
+	branch := data.BranchName(*issue)
+	err := clipboard.WriteAll(branch)
+	if err != nil {
+		toast, cmd := components.ShowToast(
+			fmt.Sprintf("Clipboard error: %s", err),
+			components.ToastError, toastDuration,
+		)
+		m.toast = toast
+		return m, cmd
+	}
+	toast, cmd := components.ShowToast(
+		fmt.Sprintf("Copied: %s", branch),
+		components.ToastSuccess, toastDuration,
+	)
+	m.toast = toast
+	return m, cmd
+}
+
+// createAndSwitchBranch creates a git branch and switches to it.
+func (m Model) createAndSwitchBranch() (tea.Model, tea.Cmd) {
+	issue := m.parade.SelectedIssue
+	if issue == nil {
+		return m, nil
+	}
+	branch := data.BranchName(*issue)
+	issueCopy := *issue
+	return m, func() tea.Msg {
+		err := exec.Command("git", "checkout", "-b", branch).Run()
+		action := fmt.Sprintf("branch: %s", branch)
+		if err != nil {
+			return mutateResultMsg{issueID: issueCopy.ID, action: action, err: err}
+		}
+		return mutateResultMsg{issueID: issueCopy.ID, action: action}
+	}
+}
+
+// diffIssues compares new issues against the previous snapshot and returns the count of changes.
+func (m *Model) diffIssues(newIssues []data.Issue) int {
+	if len(m.prevIssueMap) == 0 {
+		return 0
+	}
+
+	changed := 0
+	newMap := make(map[string]data.Status, len(newIssues))
+	for _, iss := range newIssues {
+		newMap[iss.ID] = iss.Status
+	}
+
+	// Check for status changes or new issues
+	for id, newStatus := range newMap {
+		oldStatus, existed := m.prevIssueMap[id]
+		if !existed || oldStatus != newStatus {
+			m.changedIDs[id] = true
+			changed++
+		}
+	}
+
+	// Check for removed issues
+	for id := range m.prevIssueMap {
+		if _, exists := newMap[id]; !exists {
+			changed++
+		}
+	}
+
+	return changed
+}
+
 // syncSelection updates the detail panel with the currently selected issue.
 func (m *Model) syncSelection() {
 	if m.parade.SelectedIssue != nil {
@@ -421,15 +688,13 @@ func (m *Model) syncSelection() {
 
 // layout recalculates dimensions for all sub-components.
 func (m *Model) layout() {
-	// Reserve lines for header (2) + divider (1) + footer (1) + divider (1)
 	headerH := 2
-	footerH := 2 // divider + footer
+	footerH := 2
 	bodyH := m.height - headerH - footerH
 	if bodyH < 1 {
 		bodyH = 1
 	}
 
-	// Split width: ~40% parade, ~60% detail
 	paradeW := m.width * 2 / 5
 	if paradeW < 30 {
 		paradeW = 30
@@ -450,13 +715,11 @@ func (m *Model) layout() {
 	m.detail.IssueMap = data.BuildIssueMap(m.issues)
 	m.detail.BlockingTypes = m.blockingTypes
 
-	// Initialize parade on first layout
 	if len(m.parade.Items) == 0 {
 		m.parade = views.NewParade(m.issues, paradeW, bodyH, m.blockingTypes)
 		m.syncSelection()
 	}
 
-	// Initialize detail viewport
 	m.detail.Viewport = viewport.New(detailW-2, bodyH)
 	m.propagateAgentState()
 	if m.parade.SelectedIssue != nil {
@@ -484,7 +747,6 @@ func (m *Model) rebuildParade() {
 	filteredIssues := data.FilterIssues(m.issues, m.filterInput.Value())
 	groups := m.groups
 	if m.filterInput.Value() != "" {
-		// Use section counts from the filtered list while filtering.
 		groups = data.GroupByParade(filteredIssues, m.blockingTypes)
 	}
 
@@ -501,6 +763,9 @@ func (m *Model) rebuildParade() {
 		m.parade.ToggleClosed()
 	}
 	m.restoreParadeSelection(oldSelectedID)
+
+	// Propagate change indicators to parade
+	m.parade.ChangedIDs = m.changedIDs
 
 	m.detail.AllIssues = m.issues
 	m.detail.IssueMap = data.BuildIssueMap(m.issues)
@@ -521,7 +786,6 @@ func (m *Model) restoreParadeSelection(issueID string) {
 		m.parade.Cursor = i
 		m.parade.SelectedIssue = item.Issue
 
-		// Keep the selected row visible after rebuild.
 		if m.parade.Cursor < m.parade.ScrollOffset {
 			m.parade.ScrollOffset = m.parade.Cursor
 		}
@@ -553,7 +817,7 @@ func (m *Model) propagateAgentState() {
 	m.header.TownStatus = m.townStatus
 	m.header.GasTownAvailable = m.gtEnv.Available
 	if m.detail.Issue != nil {
-		m.detail.SetIssue(m.detail.Issue) // refresh detail content
+		m.detail.SetIssue(m.detail.Issue)
 	}
 }
 
@@ -585,7 +849,6 @@ func (m Model) View() string {
 
 	header := m.header.View()
 
-	// Body: parade | detail side by side
 	body := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		m.parade.View(),
@@ -593,8 +856,9 @@ func (m Model) View() string {
 	)
 
 	var bottomBar string
-	if m.filtering || m.filterInput.Value() != "" {
-		// Show active/persisted filter input in the bottom bar area.
+	if m.toast.Active() {
+		bottomBar = m.toast.View(m.width)
+	} else if m.filtering || m.filterInput.Value() != "" {
 		bottomBar = lipgloss.NewStyle().
 			Padding(0, 1).
 			Width(m.width).
@@ -609,7 +873,7 @@ func (m Model) View() string {
 
 	divider := components.Divider(m.width)
 
-	ui := lipgloss.JoinVertical(
+	screen := lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
 		body,
@@ -617,10 +881,68 @@ func (m Model) View() string {
 		bottomBar,
 	)
 
+	// Confetti overlay
+	if m.confetti.Active() {
+		overlay := m.confetti.View()
+		if overlay != "" {
+			screen = overlayStrings(screen, overlay)
+		}
+	}
+
 	if m.showHelp {
 		helpModal := components.NewHelp(m.width, m.height).View()
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, helpModal)
 	}
 
-	return ui
+	return screen
+}
+
+// overlayStrings composites non-space characters from overlay onto base.
+func overlayStrings(base, overlay string) string {
+	baseLines := splitLines(base)
+	overlayLines := splitLines(overlay)
+
+	for y := 0; y < len(overlayLines) && y < len(baseLines); y++ {
+		baseRunes := []rune(baseLines[y])
+		overlayRunes := []rune(overlayLines[y])
+		for x := 0; x < len(overlayRunes) && x < len(baseRunes); x++ {
+			if overlayRunes[x] != ' ' {
+				baseRunes[x] = overlayRunes[x]
+			}
+		}
+		baseLines[y] = string(baseRunes)
+	}
+
+	return joinLines(baseLines)
+}
+
+func splitLines(s string) []string {
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			lines = append(lines, s[start:i])
+			start = i + 1
+		}
+	}
+	lines = append(lines, s[start:])
+	return lines
+}
+
+func joinLines(lines []string) string {
+	result := ""
+	for i, line := range lines {
+		if i > 0 {
+			result += "\n"
+		}
+		result += line
+	}
+	return result
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
