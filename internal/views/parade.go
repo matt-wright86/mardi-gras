@@ -267,10 +267,18 @@ func (p *Parade) renderBorderTop(sec paradeSection) string {
 	prefix := borderStyle.Render(ui.BoxTopLeft + ui.BoxHorizontal + " ")
 	suffix := borderStyle.Render(" " + ui.BoxTopRight)
 
-	// Fill remaining width with ─ (account for space after title)
 	prefixW := lipgloss.Width(prefix)
 	suffixW := lipgloss.Width(suffix)
-	fillLen := p.Width - prefixW - titleWidth - 1 - suffixW // -1 for space before fill
+
+	// Truncate title text if it exceeds available space
+	availableForTitle := p.Width - prefixW - suffixW - 1 // -1 for space after title
+	if titleWidth > availableForTitle && availableForTitle > 0 {
+		titleText = truncate(titleText, availableForTitle)
+		coloredTitle = sec.Style.Render(titleText)
+		titleWidth = lipgloss.Width(coloredTitle)
+	}
+
+	fillLen := p.Width - prefixW - titleWidth - 1 - suffixW
 	if fillLen < 1 {
 		fillLen = 1
 	}
@@ -310,21 +318,37 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 	symStyle := lipgloss.NewStyle().Foreground(statusColor(issue, p.issueMap, p.blockingTypes))
 
 	// Build the "next blocker" hint for stalled issues
-	hint := ""
+	var rawHint string
+	hintStyle := lipgloss.NewStyle().Foreground(ui.Muted)
 	eval := issue.EvaluateDependencies(p.issueMap, p.blockingTypes)
 	if eval.IsBlocked && eval.NextBlockerID != "" {
-		hintStyle := lipgloss.NewStyle().Foreground(ui.Muted)
 		if target, ok := p.issueMap[eval.NextBlockerID]; ok {
-			hint = hintStyle.Render(fmt.Sprintf(" %s %s %s", ui.SymNextArrow, eval.NextBlockerID, truncate(target.Title, 20)))
+			rawHint = fmt.Sprintf(" %s %s %s", ui.SymNextArrow, eval.NextBlockerID, target.Title)
 		} else {
-			hint = hintStyle.Render(fmt.Sprintf(" %s missing %s", ui.SymNextArrow, eval.NextBlockerID))
+			rawHint = fmt.Sprintf(" %s missing %s", ui.SymNextArrow, eval.NextBlockerID)
 		}
 	}
 
 	// Inner width (between │ borders, with 1 char padding each side)
 	innerWidth := p.Width - 4 // │ + space + content + space + │
 
-	// Truncate title to fit
+	// First, constrain the hint length if the terminal is very narrow
+	maxHint := innerWidth - 16 // Reserve space for sym, ID, prio
+	if maxHint < 0 {
+		maxHint = 0
+	}
+
+	if lipgloss.Width(rawHint) > maxHint && maxHint > 0 {
+		rawHint = truncate(rawHint, maxHint)
+	} else if maxHint == 0 {
+		rawHint = ""
+	}
+
+	hint := ""
+	if rawHint != "" {
+		hint = hintStyle.Render(rawHint)
+	}
+
 	hintLen := lipgloss.Width(hint)
 	maxTitle := innerWidth - 16 - hintLen
 	if maxTitle < 0 {
@@ -346,14 +370,28 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 	if selected {
 		cursor := ui.ItemCursor.Render(ui.Cursor + " ")
 		row := cursor + line
-		// Pad content to fill inner width, then highlight
-		content := ui.ItemSelectedBg.Width(innerWidth).MaxWidth(innerWidth).Render(row)
+		rowWidth := lipgloss.Width(row)
+		padLen := innerWidth - rowWidth
+		if padLen < 0 {
+			padLen = 0
+		}
+		row += strings.Repeat(" ", padLen) // explicitly pad otherwise layout breaks on resize
+		content := ui.ItemSelectedBg.Render(row)
+		// strictly truncate block
+		content = truncate(content, innerWidth)
 		return leftBorder + " " + content + " " + rightBorder
 	}
 
 	// Non-selected: pad with leading space for alignment (matching cursor indent)
 	row := "  " + line
-	content := lipgloss.NewStyle().Width(innerWidth).MaxWidth(innerWidth).Render(row)
+	rowWidth := lipgloss.Width(row)
+	padLen := innerWidth - rowWidth
+	if padLen < 0 {
+		padLen = 0
+	}
+	row += strings.Repeat(" ", padLen)
+	content := lipgloss.NewStyle().Render(row)
+	content = truncate(content, innerWidth)
 	return leftBorder + " " + content + " " + rightBorder
 }
 
