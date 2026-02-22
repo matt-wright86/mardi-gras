@@ -148,6 +148,34 @@ Closed issues are collapsed by default (because in any real project, 90%+ of you
 
 Stalled issues show a "next blocker" hint so you can see at a glance what's holding things up. The detail panel breaks dependencies into four categories: waiting on (active blockers), missing (dangling references), resolved (closed blockers), and related (non-blocking dependency types).
 
+## tmux Integration
+
+### Status Line Widget
+
+Show parade counts directly in your tmux status bar:
+
+```bash
+set -g status-right "#(mg --status)"
+```
+
+This outputs a compact, color-coded summary: rolling, lined up, stalled, and closed counts. The `--path` and `--block-types` flags work here too, so you can point at a specific project:
+
+```bash
+set -g status-right "#(mg --status --path ~/myproject/.beads/issues.jsonl)"
+```
+
+### Popup Dashboard
+
+Launch the full TUI in a tmux popup with a single keybinding:
+
+```bash
+bind m display-popup -E -w 80% -h 75% -d "#{pane_current_path}" "mg"
+```
+
+- `-E` closes the popup when `mg` exits
+- `-w 80% -h 75%` sizes the popup relative to the terminal
+- `-d "#{pane_current_path}"` preserves the working directory so `mg` auto-detects the right `.beads/issues.jsonl`
+
 ## Built with
 
 - [BubbleTea](https://github.com/charmbracelet/bubbletea) — Elm Architecture for the terminal
@@ -178,7 +206,6 @@ It is a visual lens on top of Beads. Beads remains the source of truth.
 - Dependency graph view (ASCII DAG)
 - Claude Code agent launch from a task
 - Bead throw celebration animation on task close
-- tmux popup mode and status line widget
 
 No promises. Just dreams. PRs welcome.
 
