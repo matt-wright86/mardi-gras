@@ -73,6 +73,7 @@ func (h Help) View() string {
 				{key: "$", desc: "Set priority: P4 (backlog)"},
 				{key: "b", desc: "Copy branch name to clipboard"},
 				{key: "B", desc: "Create + checkout git branch"},
+				{key: "N", desc: "Create new issue"},
 			},
 		},
 		{

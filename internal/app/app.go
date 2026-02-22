@@ -70,6 +70,10 @@ type Model struct {
 
 	// Focus mode
 	focusMode bool
+
+	// Issue creation form
+	creating   bool
+	createForm components.CreateForm
 }
 
 // New creates a new app model from loaded issues.
@@ -166,6 +170,31 @@ type changeIndicatorExpiredMsg struct{}
 
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Handle create form result
+	if result, ok := msg.(components.CreateFormResult); ok {
+		m.creating = false
+		if result.Cancelled || result.Title == "" {
+			return m, nil
+		}
+		title := result.Title
+		issueType := data.IssueType(result.Type)
+		priority := components.ParsePriority(result.Priority)
+		return m, func() tea.Msg {
+			_, err := data.CreateIssue(title, issueType, priority)
+			return mutateResultMsg{issueID: title, action: "created", err: err}
+		}
+	}
+
+	// Forward all messages to create form when active
+	if m.creating {
+		if km, ok := msg.(tea.KeyMsg); ok && km.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+		var cmd tea.Cmd
+		m.createForm, cmd = m.createForm.Update(msg)
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
@@ -524,6 +553,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
+
+	case "N":
+		m.creating = true
+		m.createForm = components.NewCreateForm(m.width, m.height)
+		return m, m.createForm.Init()
 	}
 
 	// Navigation keys depend on active pane
@@ -998,6 +1032,15 @@ func (m Model) View() string {
 	if m.showHelp {
 		helpModal := components.NewHelp(m.width, m.height).View()
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, helpModal)
+	}
+
+	if m.creating {
+		formTitle := ui.HelpTitle.Render("[ NEW ISSUE ]")
+		formBody := m.createForm.View()
+		formHint := ui.HelpHint.Render("esc to cancel")
+		formContent := lipgloss.JoinVertical(lipgloss.Left, formTitle, "", formBody, "", formHint)
+		formBox := ui.HelpOverlayBg.Width(m.width - 8).Render(formContent)
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, formBox)
 	}
 
 	return screen

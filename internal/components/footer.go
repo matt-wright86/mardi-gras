@@ -32,6 +32,7 @@ var ParadeBindings = []FooterBinding{
 	{Key: "j/k", Desc: "navigate"},
 	{Key: "1/2/3", Desc: "status"},
 	{Key: "b", Desc: "branch"},
+	{Key: "N", Desc: "new"},
 	{Key: "a", Desc: "agent"},
 	{Key: "q", Desc: "quit"},
 }
