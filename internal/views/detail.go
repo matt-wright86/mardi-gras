@@ -20,6 +20,7 @@ type Detail struct {
 	Width         int
 	Height        int
 	Focused       bool
+	ActiveAgents  map[string]string
 }
 
 // NewDetail creates a detail panel.
@@ -115,6 +116,16 @@ func (d *Detail) renderContent() string {
 
 	// ID
 	lines = append(lines, d.row("ID:", ui.DetailValue.Render(issue.ID)))
+
+	// Agent status
+	if d.ActiveAgents != nil {
+		if winName, active := d.ActiveAgents[issue.ID]; active {
+			agentStyle := lipgloss.NewStyle().Foreground(ui.StatusAgent).Bold(true)
+			lines = append(lines, d.row("Agent:", agentStyle.Render(
+				fmt.Sprintf("%s active (%s)", ui.SymAgent, winName),
+			)))
+		}
+	}
 
 	// Description
 	if issue.Description != "" {

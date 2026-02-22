@@ -70,6 +70,7 @@ func BuildPrompt(issue data.Issue, deps data.DepEval, issueMap map[string]*data.
 
 	b.WriteString(fmt.Sprintf("\n---\nWhen you begin work, run: bd update %s --status=in_progress\n", issue.ID))
 	b.WriteString(fmt.Sprintf("When finished, run: bd close %s\n", issue.ID))
+	b.WriteString("\nIf this task is complex enough to benefit from parallel work, consider using agent teams to spawn teammates for independent subtasks.")
 
 	return b.String()
 }

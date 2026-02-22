@@ -52,6 +52,7 @@ type Parade struct {
 	issueMap      map[string]*data.Issue
 	blockingTypes map[string]bool
 	SelectedIssue *data.Issue
+	ActiveAgents  map[string]string // issueID -> tmux window name
 }
 
 // NewParade creates a parade view from a set of issues.
@@ -318,6 +319,16 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 	prioStyle := ui.BadgePriority.Foreground(ui.PriorityColor(int(issue.Priority)))
 	symStyle := lipgloss.NewStyle().Foreground(statusColor(issue, p.issueMap, p.blockingTypes))
 
+	// Agent badge prefix
+	agentPrefix := ""
+	agentWidth := 0
+	if p.ActiveAgents != nil {
+		if _, active := p.ActiveAgents[issue.ID]; active {
+			agentPrefix = ui.AgentBadge.Render(ui.SymAgent) + " "
+			agentWidth = 2 // symbol + space
+		}
+	}
+
 	// Build the "next blocker" hint for stalled issues
 	var rawHint string
 	hintStyle := lipgloss.NewStyle().Foreground(ui.Muted)
@@ -334,7 +345,7 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 	innerWidth := p.Width - 4 // │ + space + content + space + │
 
 	// First, constrain the hint length if the terminal is very narrow
-	maxHint := innerWidth - 16 // Reserve space for sym, ID, prio
+	maxHint := innerWidth - 16 - agentWidth // Reserve space for sym, ID, prio, agent badge
 	if maxHint < 0 {
 		maxHint = 0
 	}
@@ -351,14 +362,15 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 	}
 
 	hintLen := lipgloss.Width(hint)
-	maxTitle := innerWidth - 16 - hintLen
+	maxTitle := innerWidth - 16 - hintLen - agentWidth
 	if maxTitle < 0 {
 		maxTitle = 0
 	}
 	title := truncate(issue.Title, maxTitle)
 
-	line := fmt.Sprintf("%s %s %s %s",
+	line := fmt.Sprintf("%s %s%s %s %s",
 		symStyle.Render(sym),
+		agentPrefix,
 		issue.ID,
 		title,
 		prioStyle.Render(prio),

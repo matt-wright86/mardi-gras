@@ -11,8 +11,9 @@ import (
 
 // Header renders the top title bar with bead string and counts.
 type Header struct {
-	Width  int
-	Groups map[data.ParadeStatus][]data.Issue
+	Width      int
+	Groups     map[data.ParadeStatus][]data.Issue
+	AgentCount int
 }
 
 // View renders the header.
@@ -30,12 +31,19 @@ func (h Header) View() string {
 		stalled, linedUp, rolling, len(h.Groups[data.ParadePastTheStand]),
 	))
 
+	agentInfo := ""
+	if h.AgentCount > 0 {
+		agentStyle := lipgloss.NewStyle().Foreground(ui.StatusAgent).Bold(true)
+		agentInfo = agentStyle.Render(fmt.Sprintf(" %s%d", ui.SymAgent, h.AgentCount))
+	}
+
 	bar := h.renderProgressBar(total, len(h.Groups[data.ParadePastTheStand]), 20)
 
 	titleLine := lipgloss.JoinHorizontal(
 		lipgloss.Center,
 		title,
 		counts,
+		agentInfo,
 		"  ",
 		bar,
 	)

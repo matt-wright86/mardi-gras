@@ -56,7 +56,8 @@ func (h Help) View() string {
 				{key: "enter", desc: "Focus detail pane"},
 				{key: "c", desc: "Toggle closed issues"},
 				{key: "/", desc: "Enter filter mode"},
-				{key: "a", desc: "Launch Claude agent"},
+				{key: "a", desc: "Launch agent (tmux: new window)"},
+				{key: "A", desc: "Kill active agent on issue"},
 			},
 		},
 		{
@@ -65,7 +66,8 @@ func (h Help) View() string {
 				{key: "j / k", desc: "Scroll up/down"},
 				{key: "esc", desc: "Back to parade pane"},
 				{key: "/", desc: "Enter filter mode"},
-				{key: "a", desc: "Launch Claude agent"},
+				{key: "a", desc: "Launch agent (tmux: new window)"},
+				{key: "A", desc: "Kill active agent on issue"},
 			},
 		},
 		{

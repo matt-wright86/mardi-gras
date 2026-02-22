@@ -33,6 +33,7 @@ var ParadeBindings = []FooterBinding{
 	{Key: "tab", Desc: "switch pane"},
 	{Key: "c", Desc: "toggle closed"},
 	{Key: "a", Desc: "agent"},
+	{Key: "A", Desc: "kill agent"},
 	{Key: "q", Desc: "quit"},
 }
 
@@ -44,6 +45,7 @@ var DetailBindings = []FooterBinding{
 	{Key: "tab", Desc: "switch pane"},
 	{Key: "esc", Desc: "back"},
 	{Key: "a", Desc: "agent"},
+	{Key: "A", Desc: "kill agent"},
 	{Key: "q", Desc: "quit"},
 }
 

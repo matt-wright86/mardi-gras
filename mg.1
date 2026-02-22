@@ -1,0 +1,242 @@
+.TH MG 1 "2026-02-22" "mardi-gras" "User Commands"
+.SH NAME
+mg \- terminal UI for Beads issues
+.SH SYNOPSIS
+.B mg
+.RB [ \-\-path
+.IR file ]
+.RB [ \-\-block\-types
+.IR types ]
+.RB [ \-\-status ]
+.RB [ \-\-version ]
+.SH DESCRIPTION
+.B mg
+(Mardi Gras) is a terminal UI that presents
+.BR beads (1)
+issues as a parade: what's moving, what's waiting,
+what's blocked, and what's done.
+.PP
+It reads
+.I .beads/issues.jsonl
+directly with no daemon or config file. The file is polled automatically so
+changes made by agents, scripts, or
+.B bd
+commands appear in real time.
+.PP
+When run without
+.BR \-\-path ,
+.B mg
+walks up from the current working directory looking for
+.IR .beads/issues.jsonl .
+.SH OPTIONS
+.TP
+.BI \-\-path " file"
+Path to a
+.I .beads/issues.jsonl
+file. If omitted,
+.B mg
+auto\-detects from the current directory upward.
+.TP
+.BI \-\-block\-types " types"
+Comma\-separated dependency types to treat as blockers (default:
+.BR blocks ).
+Can also be set via
+.BR MG_BLOCK_TYPES .
+.TP
+.B \-\-status
+Output a compact, color\-coded parade summary for use in a
+tmux status line, then exit.
+.TP
+.B \-\-version
+Print the version and exit.
+.SH KEYBINDINGS
+.SS Navigation
+.TP
+.BR j ", " k
+Move selection down / up.
+.TP
+.BR g ", " G
+Jump to top / bottom.
+.TP
+.B tab
+Switch focus between parade and detail panes.
+.TP
+.B enter
+Focus the detail pane.
+.SS Filtering
+.TP
+.B /
+Enter filter mode. The bottom bar becomes a query input.
+.TP
+.B enter
+(in filter mode) Apply the filter and return to list navigation.
+.TP
+.B esc
+(in filter mode) Clear the filter and exit filter mode. Outside filter mode,
+return focus to the parade pane.
+.SS Actions
+.TP
+.B c
+Toggle visibility of closed issues.
+.TP
+.B a
+Launch a Claude Code agent for the selected issue. In tmux, opens a new window;
+otherwise suspends the TUI.
+.TP
+.B A
+Kill the active agent on the selected issue (tmux only).
+.TP
+.B ?
+Toggle the help overlay.
+.TP
+.BR q ", " ctrl\-c
+Quit.
+.SH FILTER SYNTAX
+Filter queries are entered after pressing
+.BR / .
+Multiple terms use AND semantics (all terms must match).
+.PP
+Supported forms:
+.TP
+.I free text
+Matches against issue ID and title. Example:
+.BR "deploy auth" .
+.TP
+.BI type: name
+Filter by issue type:
+.BR bug ", " feature ", " task ", " chore ", " epic .
+.TP
+.BI p 0\-4
+Priority shorthand. Example:
+.BR p1 .
+.TP
+.BI priority: value
+Priority by number
+.RB ( 0 \- 4 )
+or name
+.RB ( critical ", " high ", " medium ", " low ", " backlog ).
+.PP
+Examples:
+.RS
+.nf
+type:feature p1 deploy
+priority:high auth
+type:feature p0 auth deploy
+.fi
+.RE
+.SH THE PARADE
+Issues are grouped into four sections:
+.TP
+.BR Rolling " (\[bu])"
+In progress \(em the float is moving.
+.TP
+.BR "Lined Up" " (\[mu])"
+Open and unblocked \(em waiting its turn.
+.TP
+.BR Stalled " (\[/o])"
+Blocked by a dependency. A "next blocker" hint is shown.
+.TP
+.BR "Past the Stand" " (\[OK])"
+Done. Collapsed by default; press
+.B c
+to expand.
+.SH TMUX INTEGRATION
+.SS Status Line Widget
+Add parade counts to your tmux status bar:
+.PP
+.RS
+.nf
+set -g status-right "#(mg --status)"
+.fi
+.RE
+.PP
+Accepts
+.B \-\-path
+and
+.B \-\-block\-types
+to target a specific project.
+.SS Popup Dashboard
+Launch the full TUI in a tmux popup:
+.PP
+.RS
+.nf
+bind m display-popup -E -w 80% -h 75% \\
+    -d "#{pane_current_path}" "mg"
+.fi
+.RE
+.SS Agent Dispatch
+When running inside tmux, pressing
+.B a
+opens agents in new tmux windows so the parade stays visible.
+Active agents show a lightning-bolt badge in the parade and the header
+displays the total agent count. Press
+.B a
+on an issue with an active agent to switch to its window, or
+.B A
+to kill it.
+.PP
+Outside tmux the TUI suspends while the agent runs, then resumes when it exits.
+.SH ENVIRONMENT
+.TP
+.B MG_BLOCK_TYPES
+Comma\-separated dependency types that count as blockers. Overridden by
+.BR \-\-block\-types .
+Default:
+.BR blocks .
+.TP
+.B TMUX
+When set (and
+.B tmux
+is on PATH), enables tmux\-native agent dispatch.
+.SH EXIT STATUS
+.TP
+.B 0
+Normal exit.
+.TP
+.B 1
+Error (missing file, bad path, etc.).
+.SH FILES
+.TP
+.I .beads/issues.jsonl
+Beads issue data. Searched upward from the working directory.
+.SH EXAMPLES
+Auto\-detect the nearest Beads project:
+.PP
+.RS
+.nf
+mg
+.fi
+.RE
+.PP
+Point at a specific project:
+.PP
+.RS
+.nf
+mg --path ~/myproject/.beads/issues.jsonl
+.fi
+.RE
+.PP
+Add extra blocking types:
+.PP
+.RS
+.nf
+mg --block-types blocks,discovered-from
+MG_BLOCK_TYPES=blocks,parent-child mg
+.fi
+.RE
+.PP
+Use as a tmux status widget:
+.PP
+.RS
+.nf
+set -g status-right "#(mg --status)"
+.fi
+.RE
+.SH SEE ALSO
+.BR bd (1),
+.BR tmux (1),
+.BR claude (1)
+.SH AUTHORS
+Matt Wright and contributors.
+.SH LICENSE
+MIT

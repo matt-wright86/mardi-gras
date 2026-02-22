@@ -27,6 +27,7 @@ const (
 	SymResolved    = "✓" // alias of SymPassed
 	SymNonBlocking = "·"
 	SymNextArrow   = "next →"
+	SymAgent       = "⚡"
 
 	// Section borders (rounded)
 	BoxTopLeft     = "╭"

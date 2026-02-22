@@ -43,6 +43,8 @@ type Model struct {
 	ready         bool
 	claudeAvail   bool
 	projectDir    string
+	inTmux        bool
+	activeAgents  map[string]string // issueID -> tmux window name
 }
 
 // New creates a new app model from loaded issues.
@@ -78,16 +80,35 @@ func New(issues []data.Issue, watchPath string, pathExplicit bool, blockingTypes
 		filterInput:   ti,
 		claudeAvail:   agent.Available(),
 		projectDir:    projectDir,
+		inTmux:        agent.InTmux() && agent.TmuxAvailable(),
+		activeAgents:  make(map[string]string),
 	}
 }
 
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
-	return data.WatchFile(m.watchPath, m.lastFileMod)
+	return tea.Batch(
+		data.WatchFile(m.watchPath, m.lastFileMod),
+		pollAgents(m.inTmux),
+	)
 }
 
 // agentFinishedMsg is sent when a launched claude session exits.
 type agentFinishedMsg struct{ err error }
+
+type agentLaunchedMsg struct {
+	issueID    string
+	windowName string
+}
+
+type agentLaunchErrorMsg struct {
+	issueID string
+	err     error
+}
+
+type agentStatusMsg struct {
+	activeAgents map[string]string
+}
 
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -118,21 +139,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastFileMod = msg.LastMod
 		}
 		m.rebuildParade()
-		return m, data.WatchFile(m.watchPath, m.lastFileMod)
+		return m, tea.Batch(data.WatchFile(m.watchPath, m.lastFileMod), pollAgents(m.inTmux))
 
 	case data.FileUnchangedMsg:
 		if !msg.LastMod.IsZero() {
 			m.lastFileMod = msg.LastMod
 		}
-		return m, data.WatchFile(m.watchPath, m.lastFileMod)
+		return m, tea.Batch(data.WatchFile(m.watchPath, m.lastFileMod), pollAgents(m.inTmux))
 
 	case data.FileWatchErrorMsg:
-		return m, data.WatchFile(m.watchPath, m.lastFileMod)
+		return m, tea.Batch(data.WatchFile(m.watchPath, m.lastFileMod), pollAgents(m.inTmux))
+
+	case agentLaunchedMsg:
+		m.activeAgents[msg.issueID] = msg.windowName
+		m.propagateAgentState()
+		return m, nil
+
+	case agentLaunchErrorMsg:
+		return m, nil
+
+	case agentStatusMsg:
+		m.activeAgents = msg.activeAgents
+		m.propagateAgentState()
+		return m, nil
 
 	case agentFinishedMsg:
 		// Reset lastFileMod to force reload on next poll cycle.
 		m.lastFileMod = time.Time{}
-		return m, data.WatchFile(m.watchPath, m.lastFileMod)
+		return m, tea.Batch(data.WatchFile(m.watchPath, m.lastFileMod), pollAgents(m.inTmux))
 	}
 
 	// Forward to detail viewport when focused
@@ -226,12 +260,43 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if issue == nil || !m.claudeAvail {
 			return m, nil
 		}
+		// If agent already active on this issue, switch to its window
+		if _, active := m.activeAgents[issue.ID]; active && m.inTmux {
+			_ = agent.SelectAgentWindow(issue.ID)
+			return m, nil
+		}
 		deps := issue.EvaluateDependencies(m.detail.IssueMap, m.blockingTypes)
 		prompt := agent.BuildPrompt(*issue, deps, m.detail.IssueMap)
+
+		if m.inTmux {
+			issueID := issue.ID
+			return m, func() tea.Msg {
+				winName, err := agent.LaunchInTmux(prompt, m.projectDir, issueID)
+				if err != nil {
+					return agentLaunchErrorMsg{issueID: issueID, err: err}
+				}
+				return agentLaunchedMsg{issueID: issueID, windowName: winName}
+			}
+		}
+		// Fallback: suspend TUI (non-tmux)
 		c := agent.Command(prompt, m.projectDir)
 		return m, tea.ExecProcess(c, func(err error) tea.Msg {
 			return agentFinishedMsg{err: err}
 		})
+
+	case "A":
+		issue := m.parade.SelectedIssue
+		if issue == nil || !m.inTmux {
+			return m, nil
+		}
+		if _, active := m.activeAgents[issue.ID]; !active {
+			return m, nil
+		}
+		issueID := issue.ID
+		return m, func() tea.Msg {
+			_ = agent.KillAgentWindow(issueID)
+			return agentStatusMsg{activeAgents: make(map[string]string)} // next poll will reconcile
+		}
 	}
 
 	// Navigation keys depend on active pane
@@ -312,8 +377,9 @@ func (m *Model) layout() {
 	detailW := m.width - paradeW
 
 	m.header = components.Header{
-		Width:  m.width,
-		Groups: m.groups,
+		Width:      m.width,
+		Groups:     m.groups,
+		AgentCount: len(m.activeAgents),
 	}
 
 	m.parade.SetSize(paradeW, bodyH)
@@ -330,6 +396,7 @@ func (m *Model) layout() {
 
 	// Initialize detail viewport
 	m.detail.Viewport = viewport.New(detailW-2, bodyH)
+	m.propagateAgentState()
 	if m.parade.SelectedIssue != nil {
 		m.detail.SetIssue(m.parade.SelectedIssue)
 	}
@@ -360,8 +427,9 @@ func (m *Model) rebuildParade() {
 	}
 
 	m.header = components.Header{
-		Width:  m.width,
-		Groups: groups,
+		Width:      m.width,
+		Groups:     groups,
+		AgentCount: len(m.activeAgents),
 	}
 
 	m.parade = views.NewParade(filteredIssues, paradeW, bodyH, m.blockingTypes)
@@ -373,6 +441,7 @@ func (m *Model) rebuildParade() {
 	m.detail.AllIssues = m.issues
 	m.detail.IssueMap = data.BuildIssueMap(m.issues)
 	m.detail.BlockingTypes = m.blockingTypes
+	m.propagateAgentState()
 	m.syncSelection()
 }
 
@@ -407,6 +476,30 @@ func (m *Model) restoreParadeSelection(issueID string) {
 			m.parade.ScrollOffset = 0
 		}
 		return
+	}
+}
+
+// propagateAgentState pushes active agent info to all sub-views.
+func (m *Model) propagateAgentState() {
+	m.parade.ActiveAgents = m.activeAgents
+	m.detail.ActiveAgents = m.activeAgents
+	m.header.AgentCount = len(m.activeAgents)
+	if m.detail.Issue != nil {
+		m.detail.SetIssue(m.detail.Issue) // refresh detail content
+	}
+}
+
+// pollAgents returns a Cmd that queries tmux for active agent windows.
+func pollAgents(inTmux bool) tea.Cmd {
+	if !inTmux {
+		return nil
+	}
+	return func() tea.Msg {
+		agents, err := agent.ListAgentWindows()
+		if err != nil {
+			return agentStatusMsg{activeAgents: make(map[string]string)}
+		}
+		return agentStatusMsg{activeAgents: agents}
 	}
 }
 

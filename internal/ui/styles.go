@@ -112,6 +112,8 @@ var (
 	DepNonBlocking = lipgloss.NewStyle().
 			Foreground(Muted)
 
+	AgentBadge = lipgloss.NewStyle().Foreground(StatusAgent).Bold(true)
+
 	FooterSource = lipgloss.NewStyle().
 			Foreground(Muted)
 

@@ -32,6 +32,7 @@ var (
 	StatusLinedUp = BrightGold
 	StatusStalled = lipgloss.Color("#E74C3C")
 	StatusPassed  = Muted
+	StatusAgent   = BrightPurple
 
 	// Priority colors (P0=critical red → P4=backlog gray)
 	PrioP0 = lipgloss.Color("#FF3333")
