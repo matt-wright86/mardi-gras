@@ -6,14 +6,17 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/matt-wright86/mardi-gras/internal/data"
+	"github.com/matt-wright86/mardi-gras/internal/gastown"
 	"github.com/matt-wright86/mardi-gras/internal/ui"
 )
 
 // Header renders the top title bar with bead string and counts.
 type Header struct {
-	Width      int
-	Groups     map[data.ParadeStatus][]data.Issue
-	AgentCount int
+	Width            int
+	Groups           map[data.ParadeStatus][]data.Issue
+	AgentCount       int
+	TownStatus       *gastown.TownStatus
+	GasTownAvailable bool
 }
 
 // View renders the header.
@@ -37,6 +40,31 @@ func (h Header) View() string {
 		agentInfo = agentStyle.Render(fmt.Sprintf(" %s%d", ui.SymAgent, h.AgentCount))
 	}
 
+	gasTownInfo := ""
+	if h.GasTownAvailable && h.TownStatus != nil {
+		working := h.TownStatus.WorkingCount()
+		totalAgents := len(h.TownStatus.Agents)
+		gtStyle := lipgloss.NewStyle().Foreground(ui.BrightPurple).Italic(true)
+
+		parts := []string{fmt.Sprintf("gt:%d/%d", working, totalAgents)}
+
+		if mail := h.TownStatus.UnreadMail(); mail > 0 {
+			parts = append(parts, fmt.Sprintf("%s%d", ui.SymMail, mail))
+		}
+
+		activeConvoys := 0
+		for _, c := range h.TownStatus.Convoys {
+			if c.Status == "open" {
+				activeConvoys++
+			}
+		}
+		if activeConvoys > 0 {
+			parts = append(parts, fmt.Sprintf("%s%d", ui.SymConvoy, activeConvoys))
+		}
+
+		gasTownInfo = gtStyle.Render(" " + strings.Join(parts, " "))
+	}
+
 	bar := h.renderProgressBar(total, len(h.Groups[data.ParadePastTheStand]), 20)
 
 	titleLine := lipgloss.JoinHorizontal(
@@ -44,6 +72,7 @@ func (h Header) View() string {
 		title,
 		counts,
 		agentInfo,
+		gasTownInfo,
 		"  ",
 		bar,
 	)

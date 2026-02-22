@@ -11,6 +11,7 @@ import (
 	"github.com/matt-wright86/mardi-gras/internal/agent"
 	"github.com/matt-wright86/mardi-gras/internal/components"
 	"github.com/matt-wright86/mardi-gras/internal/data"
+	"github.com/matt-wright86/mardi-gras/internal/gastown"
 	"github.com/matt-wright86/mardi-gras/internal/ui"
 	"github.com/matt-wright86/mardi-gras/internal/views"
 )
@@ -44,7 +45,9 @@ type Model struct {
 	claudeAvail   bool
 	projectDir    string
 	inTmux        bool
-	activeAgents  map[string]string // issueID -> tmux window name
+	activeAgents  map[string]string   // issueID -> tmux window name
+	gtEnv         gastown.Env         // Gas Town environment, read once at startup
+	townStatus    *gastown.TownStatus // Latest gt status, nil when unavailable
 }
 
 // New creates a new app model from loaded issues.
@@ -82,6 +85,7 @@ func New(issues []data.Issue, watchPath string, pathExplicit bool, blockingTypes
 		projectDir:    projectDir,
 		inTmux:        agent.InTmux() && agent.TmuxAvailable(),
 		activeAgents:  make(map[string]string),
+		gtEnv:         gastown.Detect(),
 	}
 }
 
@@ -89,7 +93,7 @@ func New(issues []data.Issue, watchPath string, pathExplicit bool, blockingTypes
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		data.WatchFile(m.watchPath, m.lastFileMod),
-		pollAgents(m.inTmux),
+		pollAgentState(m.gtEnv, m.inTmux),
 	)
 }
 
@@ -108,6 +112,16 @@ type agentLaunchErrorMsg struct {
 
 type agentStatusMsg struct {
 	activeAgents map[string]string
+}
+
+type townStatusMsg struct {
+	status *gastown.TownStatus
+	err    error
+}
+
+type slingResultMsg struct {
+	issueID string
+	err     error
 }
 
 // Update implements tea.Model.
@@ -139,16 +153,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastFileMod = msg.LastMod
 		}
 		m.rebuildParade()
-		return m, tea.Batch(data.WatchFile(m.watchPath, m.lastFileMod), pollAgents(m.inTmux))
+		return m, tea.Batch(data.WatchFile(m.watchPath, m.lastFileMod), pollAgentState(m.gtEnv, m.inTmux))
 
 	case data.FileUnchangedMsg:
 		if !msg.LastMod.IsZero() {
 			m.lastFileMod = msg.LastMod
 		}
-		return m, tea.Batch(data.WatchFile(m.watchPath, m.lastFileMod), pollAgents(m.inTmux))
+		return m, tea.Batch(data.WatchFile(m.watchPath, m.lastFileMod), pollAgentState(m.gtEnv, m.inTmux))
 
 	case data.FileWatchErrorMsg:
-		return m, tea.Batch(data.WatchFile(m.watchPath, m.lastFileMod), pollAgents(m.inTmux))
+		return m, tea.Batch(data.WatchFile(m.watchPath, m.lastFileMod), pollAgentState(m.gtEnv, m.inTmux))
 
 	case agentLaunchedMsg:
 		m.activeAgents[msg.issueID] = msg.windowName
@@ -163,10 +177,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.propagateAgentState()
 		return m, nil
 
+	case townStatusMsg:
+		if msg.err == nil && msg.status != nil {
+			m.townStatus = msg.status
+			m.activeAgents = msg.status.ActiveAgentMap()
+			m.propagateAgentState()
+		}
+		return m, nil
+
+	case slingResultMsg:
+		// Sling completed (success or failure). Next poll will pick up the new agent.
+		return m, nil
+
 	case agentFinishedMsg:
 		// Reset lastFileMod to force reload on next poll cycle.
 		m.lastFileMod = time.Time{}
-		return m, tea.Batch(data.WatchFile(m.watchPath, m.lastFileMod), pollAgents(m.inTmux))
+		return m, tea.Batch(data.WatchFile(m.watchPath, m.lastFileMod), pollAgentState(m.gtEnv, m.inTmux))
 	}
 
 	// Forward to detail viewport when focused
@@ -265,6 +291,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			_ = agent.SelectAgentWindow(issue.ID)
 			return m, nil
 		}
+
+		// Gas Town: use gt sling (auto-convoy, auto-polecat-spawn)
+		if m.gtEnv.Available {
+			issueID := issue.ID
+			return m, func() tea.Msg {
+				err := gastown.Sling(issueID)
+				return slingResultMsg{issueID: issueID, err: err}
+			}
+		}
+
+		// Tmux: split-window dispatch
 		deps := issue.EvaluateDependencies(m.detail.IssueMap, m.blockingTypes)
 		prompt := agent.BuildPrompt(*issue, deps, m.detail.IssueMap)
 
@@ -297,6 +334,29 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			_ = agent.KillAgentWindow(issueID)
 			return agentStatusMsg{activeAgents: make(map[string]string)} // next poll will reconcile
 		}
+
+	case "s":
+		issue := m.parade.SelectedIssue
+		if issue == nil || !m.gtEnv.Available {
+			return m, nil
+		}
+		// Sling with the "shiny" formula (full engineer-in-a-box workflow)
+		issueID := issue.ID
+		return m, func() tea.Msg {
+			err := gastown.SlingWithFormula(issueID, "shiny")
+			return slingResultMsg{issueID: issueID, err: err}
+		}
+
+	case "n":
+		issue := m.parade.SelectedIssue
+		if issue == nil || !m.gtEnv.Available {
+			return m, nil
+		}
+		// Nudge the agent working on this issue
+		if agentName, active := m.activeAgents[issue.ID]; active {
+			_ = gastown.Nudge(agentName, "")
+		}
+		return m, nil
 	}
 
 	// Navigation keys depend on active pane
@@ -377,9 +437,11 @@ func (m *Model) layout() {
 	detailW := m.width - paradeW
 
 	m.header = components.Header{
-		Width:      m.width,
-		Groups:     m.groups,
-		AgentCount: len(m.activeAgents),
+		Width:            m.width,
+		Groups:           m.groups,
+		AgentCount:       len(m.activeAgents),
+		TownStatus:       m.townStatus,
+		GasTownAvailable: m.gtEnv.Available,
 	}
 
 	m.parade.SetSize(paradeW, bodyH)
@@ -427,9 +489,11 @@ func (m *Model) rebuildParade() {
 	}
 
 	m.header = components.Header{
-		Width:      m.width,
-		Groups:     groups,
-		AgentCount: len(m.activeAgents),
+		Width:            m.width,
+		Groups:           groups,
+		AgentCount:       len(m.activeAgents),
+		TownStatus:       m.townStatus,
+		GasTownAvailable: m.gtEnv.Available,
 	}
 
 	m.parade = views.NewParade(filteredIssues, paradeW, bodyH, m.blockingTypes)
@@ -482,15 +546,25 @@ func (m *Model) restoreParadeSelection(issueID string) {
 // propagateAgentState pushes active agent info to all sub-views.
 func (m *Model) propagateAgentState() {
 	m.parade.ActiveAgents = m.activeAgents
+	m.parade.TownStatus = m.townStatus
 	m.detail.ActiveAgents = m.activeAgents
+	m.detail.TownStatus = m.townStatus
 	m.header.AgentCount = len(m.activeAgents)
+	m.header.TownStatus = m.townStatus
+	m.header.GasTownAvailable = m.gtEnv.Available
 	if m.detail.Issue != nil {
 		m.detail.SetIssue(m.detail.Issue) // refresh detail content
 	}
 }
 
-// pollAgents returns a Cmd that queries tmux for active agent windows.
-func pollAgents(inTmux bool) tea.Cmd {
+// pollAgentState returns a Cmd that queries either Gas Town or raw tmux for agent state.
+func pollAgentState(gtEnv gastown.Env, inTmux bool) tea.Cmd {
+	if gtEnv.Available {
+		return func() tea.Msg {
+			status, err := gastown.FetchStatus()
+			return townStatusMsg{status: status, err: err}
+		}
+	}
 	if !inTmux {
 		return nil
 	}
@@ -526,7 +600,7 @@ func (m Model) View() string {
 			Width(m.width).
 			Render(m.filterInput.View())
 	} else {
-		footer := components.NewFooter(m.width, m.activPane == PaneDetail)
+		footer := components.NewFooter(m.width, m.activPane == PaneDetail, m.gtEnv.Available)
 		footer.SourcePath = m.watchPath
 		footer.LastRefresh = m.lastFileMod
 		footer.PathExplicit = m.pathExplicit

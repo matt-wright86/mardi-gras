@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/matt-wright86/mardi-gras/internal/data"
+	"github.com/matt-wright86/mardi-gras/internal/gastown"
 	"github.com/matt-wright86/mardi-gras/internal/ui"
 )
 
@@ -53,6 +54,7 @@ type Parade struct {
 	blockingTypes map[string]bool
 	SelectedIssue *data.Issue
 	ActiveAgents  map[string]string // issueID -> tmux window name
+	TownStatus    *gastown.TownStatus
 }
 
 // NewParade creates a parade view from a set of issues.
@@ -324,8 +326,21 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 	agentWidth := 0
 	if p.ActiveAgents != nil {
 		if _, active := p.ActiveAgents[issue.ID]; active {
-			agentPrefix = ui.AgentBadge.Render(ui.SymAgent) + " "
-			agentWidth = 2 // symbol + space
+			if p.TownStatus != nil {
+				// Gas Town: show named agent
+				if a := p.TownStatus.AgentForIssue(issue.ID); a != nil {
+					label := fmt.Sprintf("%s %s", ui.SymAgent, a.Name)
+					agentPrefix = ui.AgentBadge.Render(label) + " "
+					agentWidth = len(a.Name) + 2 // symbol + space + name + space
+				} else {
+					agentPrefix = ui.AgentBadge.Render(ui.SymAgent) + " "
+					agentWidth = 2
+				}
+			} else {
+				// Tmux-only: generic badge
+				agentPrefix = ui.AgentBadge.Render(ui.SymAgent) + " "
+				agentWidth = 2
+			}
 		}
 	}
 

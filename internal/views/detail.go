@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/matt-wright86/mardi-gras/internal/data"
+	"github.com/matt-wright86/mardi-gras/internal/gastown"
 	"github.com/matt-wright86/mardi-gras/internal/ui"
 )
 
@@ -21,6 +22,7 @@ type Detail struct {
 	Height        int
 	Focused       bool
 	ActiveAgents  map[string]string
+	TownStatus    *gastown.TownStatus
 }
 
 // NewDetail creates a detail panel.
@@ -119,11 +121,28 @@ func (d *Detail) renderContent() string {
 
 	// Agent status
 	if d.ActiveAgents != nil {
-		if winName, active := d.ActiveAgents[issue.ID]; active {
+		if _, active := d.ActiveAgents[issue.ID]; active {
 			agentStyle := lipgloss.NewStyle().Foreground(ui.StatusAgent).Bold(true)
-			lines = append(lines, d.row("Agent:", agentStyle.Render(
-				fmt.Sprintf("%s active (%s)", ui.SymAgent, winName),
-			)))
+			if d.TownStatus != nil {
+				// Gas Town mode: richer info
+				if a := d.TownStatus.AgentForIssue(issue.ID); a != nil {
+					lines = append(lines, d.row("Worker:", agentStyle.Render(
+						fmt.Sprintf("%s %s (%s)", ui.SymAgent, a.Name, a.Role),
+					)))
+					if a.State != "" {
+						lines = append(lines, d.row("State:", ui.DetailValue.Render(a.State)))
+					}
+				} else {
+					lines = append(lines, d.row("Agent:", agentStyle.Render(
+						fmt.Sprintf("%s active", ui.SymAgent),
+					)))
+				}
+			} else {
+				// Tmux-only mode: show pane-based info
+				lines = append(lines, d.row("Agent:", agentStyle.Render(
+					fmt.Sprintf("%s active", ui.SymAgent),
+				)))
+			}
 		}
 	}
 

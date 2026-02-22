@@ -28,6 +28,9 @@ const (
 	SymNonBlocking = "·"
 	SymNextArrow   = "next →"
 	SymAgent       = "⚡"
+	SymConvoy      = "◐"
+	SymMail        = "✉"
+	SymSling       = "➤"
 
 	// Section borders (rounded)
 	BoxTopLeft     = "╭"

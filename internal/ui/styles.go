@@ -112,7 +112,9 @@ var (
 	DepNonBlocking = lipgloss.NewStyle().
 			Foreground(Muted)
 
-	AgentBadge = lipgloss.NewStyle().Foreground(StatusAgent).Bold(true)
+	AgentBadge  = lipgloss.NewStyle().Foreground(StatusAgent).Bold(true)
+	ConvoyBadge = lipgloss.NewStyle().Foreground(StatusConvoy).Bold(true)
+	GasTownTag  = lipgloss.NewStyle().Foreground(BrightPurple).Italic(true)
 
 	FooterSource = lipgloss.NewStyle().
 			Foreground(Muted)

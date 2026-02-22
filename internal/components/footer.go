@@ -99,12 +99,34 @@ func (f Footer) View() string {
 }
 
 // NewFooter creates a footer with the given width and pane focus.
-func NewFooter(width int, detailFocused bool) Footer {
+func NewFooter(width int, detailFocused bool, hasGasTown bool) Footer {
 	bindings := ParadeBindings
 	if detailFocused {
 		bindings = DetailBindings
 	}
+	if hasGasTown {
+		gtBindings := []FooterBinding{
+			{Key: "s", Desc: "sling"},
+			{Key: "n", Desc: "nudge"},
+		}
+		bindings = insertBefore(bindings, "q", gtBindings...)
+	}
 	return Footer{Width: width, Bindings: bindings}
+}
+
+// insertBefore inserts extra bindings before the binding with the given key.
+func insertBefore(bindings []FooterBinding, key string, extra ...FooterBinding) []FooterBinding {
+	for i, b := range bindings {
+		if b.Key == key {
+			result := make([]FooterBinding, 0, len(bindings)+len(extra))
+			result = append(result, bindings[:i]...)
+			result = append(result, extra...)
+			result = append(result, bindings[i:]...)
+			return result
+		}
+	}
+	// Key not found, append at end
+	return append(bindings, extra...)
 }
 
 // Divider returns a full-width horizontal divider line.

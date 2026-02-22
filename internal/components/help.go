@@ -79,6 +79,15 @@ func (h Help) View() string {
 				{key: "p0, p1...", desc: "Match priority level"},
 			},
 		},
+		{
+			title: "GAS TOWN (when gt detected)",
+			bindings: []helpBinding{
+				{key: "a", desc: "Sling issue to polecat (or tmux fallback)"},
+				{key: "s", desc: "Sling with shiny formula (full workflow)"},
+				{key: "n", desc: "Nudge agent working on issue"},
+				{key: "A", desc: "Kill agent (tmux mode only)"},
+			},
+		},
 	}
 
 	header := lipgloss.JoinVertical(
