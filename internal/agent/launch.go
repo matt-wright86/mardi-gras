@@ -76,7 +76,7 @@ func BuildPrompt(issue data.Issue, deps data.DepEval, issueMap map[string]*data.
 
 // Command returns an *exec.Cmd that launches claude interactively
 // with the given prompt, working directory set to projectDir.
-func Command(prompt string, projectDir string) *exec.Cmd {
+func Command(prompt, projectDir string) *exec.Cmd {
 	c := exec.Command("claude", prompt)
 	c.Dir = projectDir
 	return c

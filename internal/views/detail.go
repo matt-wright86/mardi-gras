@@ -225,15 +225,15 @@ func paradeLabel(issue *data.Issue, issueMap map[string]*data.Issue, blockingTyp
 	}
 }
 
-func truncate(s string, max int) string {
+func truncate(s string, maxLen int) string {
 	runes := []rune(s)
-	if len(runes) <= max {
+	if len(runes) <= maxLen {
 		return s
 	}
-	if max <= 3 {
-		return string(runes[:max])
+	if maxLen <= 3 {
+		return string(runes[:maxLen])
 	}
-	return string(runes[:max-3]) + "..."
+	return string(runes[:maxLen-3]) + "..."
 }
 
 func wordWrap(s string, width int) string {

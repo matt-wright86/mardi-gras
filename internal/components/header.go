@@ -71,7 +71,7 @@ func (h Header) renderBeadString() string {
 	return lipgloss.NewStyle().Width(h.Width).Render(gradientString)
 }
 
-func (h Header) renderProgressBar(total, done int, length int) string {
+func (h Header) renderProgressBar(total, done, length int) string {
 	if total == 0 {
 		return ""
 	}
