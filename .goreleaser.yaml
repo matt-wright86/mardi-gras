@@ -38,8 +38,35 @@ brews:
 
 changelog:
   sort: asc
+  groups:
+    - title: Features
+      regexp: '^feat'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^fix'
+      order: 1
+    - title: Other
+      order: 999
   filters:
     exclude:
       - '^docs:'
       - '^test:'
       - '^chore:'
+
+release:
+  header: |
+    ## What's New
+
+    Install or upgrade:
+
+    ```bash
+    # Homebrew
+    brew install matt-wright86/homebrew-tap/mardi-gras
+    brew upgrade mardi-gras
+
+    # Go
+    go install github.com/matt-wright86/mardi-gras/cmd/mg@{{ .Tag }}
+    ```
+  footer: |
+    ---
+    _Let the good tasks roll._ ⚜

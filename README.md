@@ -1,5 +1,10 @@
 # ⚜ Mardi Gras
 
+[![CI](https://github.com/matt-wright86/mardi-gras/actions/workflows/ci.yml/badge.svg)](https://github.com/matt-wright86/mardi-gras/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/matt-wright86/mardi-gras)](https://github.com/matt-wright86/mardi-gras/releases/latest)
+[![Go](https://img.shields.io/github/go-mod/go-version/matt-wright86/mardi-gras)](https://go.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **Your Beads issues deserve a parade — not a spreadsheet.**
 
 Mardi Gras is a terminal UI for [Beads](https://github.com/steveyegge/beads) that turns your issue list into a living parade: what's moving, what's waiting, what's blocked, and what's already behind you.
