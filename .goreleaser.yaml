@@ -5,6 +5,8 @@ builds:
     binary: mg
     env:
       - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{.Version}}
     goos:
       - linux
       - darwin
@@ -22,6 +24,16 @@ archives:
 
 checksum:
   name_template: 'checksums.txt'
+
+brews:
+  - repository:
+      owner: matt-wright86
+      name: homebrew-tap
+    homepage: "https://github.com/matt-wright86/mardi-gras"
+    description: "Terminal UI for Beads issue tracking — your issues deserve a parade"
+    license: "MIT"
+    install: |
+      bin.install "mg"
 
 changelog:
   sort: asc

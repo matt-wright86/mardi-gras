@@ -1,11 +1,13 @@
 BINARY := mg
 BUILD_DIR := .
 GO := go
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION)"
 
 .PHONY: build run run-sample test clean dev tidy fmt lint
 
 build:
-	$(GO) build -o $(BINARY) ./cmd/mg
+	$(GO) build $(LDFLAGS) -o $(BINARY) ./cmd/mg
 
 run: build
 	./$(BINARY)

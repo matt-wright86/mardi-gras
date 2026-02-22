@@ -13,11 +13,20 @@ import (
 	"github.com/matt-wright86/mardi-gras/internal/tmux"
 )
 
+// version is set at build time via -ldflags.
+var version = "dev"
+
 func main() {
 	path := flag.String("path", "", "Path to .beads/issues.jsonl file")
 	blockTypesFlag := flag.String("block-types", "", "Comma-separated dependency types that count as blockers (default: blocks)")
 	statusMode := flag.Bool("status", false, "Output tmux status line and exit")
+	showVersion := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("mg", version)
+		return
+	}
 
 	// Parse blocking types from flag, env var, or default
 	blockingTypes := parseBlockingTypes(*blockTypesFlag)
