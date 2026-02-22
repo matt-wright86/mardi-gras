@@ -56,6 +56,7 @@ type Parade struct {
 	ActiveAgents  map[string]string // issueID -> tmux window name
 	TownStatus    *gastown.TownStatus
 	ChangedIDs    map[string]bool // recently changed issues (change indicator dot)
+	Selected      map[string]bool // multi-selected issue IDs
 }
 
 // NewParade creates a parade view from a set of issues.
@@ -197,6 +198,50 @@ func (p *Parade) ensureVisible() {
 	p.clampScroll()
 }
 
+// ToggleSelect toggles multi-select on the issue at the cursor.
+func (p *Parade) ToggleSelect() {
+	if p.Cursor < 0 || p.Cursor >= len(p.Items) {
+		return
+	}
+	item := p.Items[p.Cursor]
+	if !item.isSelectable() || item.Issue == nil {
+		return
+	}
+	if p.Selected == nil {
+		p.Selected = make(map[string]bool)
+	}
+	id := item.Issue.ID
+	if p.Selected[id] {
+		delete(p.Selected, id)
+	} else {
+		p.Selected[id] = true
+	}
+}
+
+// ClearSelection removes all multi-selections.
+func (p *Parade) ClearSelection() {
+	p.Selected = nil
+}
+
+// SelectedIssues returns the list of multi-selected issues.
+func (p *Parade) SelectedIssues() []*data.Issue {
+	if len(p.Selected) == 0 {
+		return nil
+	}
+	var result []*data.Issue
+	for _, item := range p.Items {
+		if item.Issue != nil && p.Selected[item.Issue.ID] {
+			result = append(result, item.Issue)
+		}
+	}
+	return result
+}
+
+// SelectionCount returns the number of multi-selected issues.
+func (p *Parade) SelectionCount() int {
+	return len(p.Selected)
+}
+
 // SetSize updates the available dimensions.
 func (p *Parade) SetSize(width, height int) {
 	p.Width = width
@@ -322,6 +367,18 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 	prioStyle := ui.BadgePriority.Foreground(ui.PriorityColor(int(issue.Priority)))
 	symStyle := lipgloss.NewStyle().Foreground(statusColor(issue, p.issueMap, p.blockingTypes))
 
+	// Multi-select checkbox
+	selectPrefix := ""
+	selectWidth := 0
+	if len(p.Selected) > 0 {
+		if p.Selected[issue.ID] {
+			selectPrefix = lipgloss.NewStyle().Foreground(ui.BrightGold).Bold(true).Render(ui.SymSelected) + " "
+		} else {
+			selectPrefix = lipgloss.NewStyle().Foreground(ui.Dim).Render(ui.SymUnselected) + " "
+		}
+		selectWidth = 2
+	}
+
 	// Change indicator dot
 	changePrefix := ""
 	changeWidth := 0
@@ -386,14 +443,15 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 	}
 
 	hintLen := lipgloss.Width(hint)
-	maxTitle := innerWidth - 16 - hintLen - agentWidth - changeWidth
+	maxTitle := innerWidth - 16 - hintLen - agentWidth - changeWidth - selectWidth
 	if maxTitle < 0 {
 		maxTitle = 0
 	}
 	title := truncate(issue.Title, maxTitle)
 
-	line := fmt.Sprintf("%s %s%s%s %s %s",
+	line := fmt.Sprintf("%s %s%s%s%s %s %s",
 		symStyle.Render(sym),
+		selectPrefix,
 		changePrefix,
 		agentPrefix,
 		issue.ID,

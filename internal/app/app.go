@@ -67,6 +67,9 @@ type Model struct {
 	changedIDs   map[string]bool
 	changedAt    time.Time
 	prevIssueMap map[string]data.Status // issueID -> previous status for diffing
+
+	// Focus mode
+	focusMode bool
 }
 
 // New creates a new app model from loaded issues.
@@ -393,11 +396,28 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
+		if m.focusMode {
+			m.focusMode = false
+			m.rebuildParade()
+			return m, nil
+		}
 		if m.activPane == PaneDetail {
 			m.activPane = PaneParade
 			m.detail.Focused = false
 		}
 		return m, nil
+
+	case "f":
+		m.focusMode = !m.focusMode
+		m.rebuildParade()
+		if m.focusMode {
+			toast, cmd := components.ShowToast("Focus mode ON", components.ToastInfo, toastDuration)
+			m.toast = toast
+			return m, cmd
+		}
+		toast, cmd := components.ShowToast("Focus mode OFF", components.ToastInfo, toastDuration)
+		m.toast = toast
+		return m, cmd
 
 	case "c":
 		m.parade.ToggleClosed()
@@ -515,6 +535,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "k", "up":
 			m.parade.MoveUp()
 			m.syncSelection()
+		case "J": // Shift+J: select + move down
+			m.parade.ToggleSelect()
+			m.parade.MoveDown()
+			m.syncSelection()
+		case "K": // Shift+K: select + move up
+			m.parade.ToggleSelect()
+			m.parade.MoveUp()
+			m.syncSelection()
+		case " ", "x": // Toggle multi-select
+			m.parade.ToggleSelect()
+		case "X": // Clear all selections
+			m.parade.ClearSelection()
 		case "g":
 			m.parade.Cursor = 0
 			m.parade.ScrollOffset = 0
@@ -557,14 +589,36 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// quickAction runs bd update to change issue status.
+// quickAction runs bd update to change issue status. Works on multi-selection if active.
 func (m Model) quickAction(status data.Status, label string) (tea.Model, tea.Cmd) {
+	// Bulk mode: apply to all selected issues
+	if selected := m.parade.SelectedIssues(); len(selected) > 0 {
+		issues := selected
+		count := len(issues)
+		m.parade.ClearSelection()
+		return m, func() tea.Msg {
+			var lastErr error
+			for _, iss := range issues {
+				if iss.Status != status {
+					if err := data.SetStatus(iss.ID, status); err != nil {
+						lastErr = err
+					}
+				}
+			}
+			return mutateResultMsg{
+				issueID: fmt.Sprintf("%d issues", count),
+				action:  label,
+				err:     lastErr,
+			}
+		}
+	}
+
 	issue := m.parade.SelectedIssue
 	if issue == nil {
 		return m, nil
 	}
 	if issue.Status == status {
-		return m, nil // already in this status
+		return m, nil
 	}
 	issueID := issue.ID
 	return m, func() tea.Msg {
@@ -573,8 +627,30 @@ func (m Model) quickAction(status data.Status, label string) (tea.Model, tea.Cmd
 	}
 }
 
-// closeSelectedIssue runs bd close on the selected issue.
+// closeSelectedIssue runs bd close on the selected issue(s).
 func (m Model) closeSelectedIssue() (tea.Model, tea.Cmd) {
+	// Bulk mode
+	if selected := m.parade.SelectedIssues(); len(selected) > 0 {
+		issues := selected
+		count := len(issues)
+		m.parade.ClearSelection()
+		return m, func() tea.Msg {
+			var lastErr error
+			for _, iss := range issues {
+				if iss.Status != data.StatusClosed {
+					if err := data.CloseIssue(iss.ID); err != nil {
+						lastErr = err
+					}
+				}
+			}
+			return mutateResultMsg{
+				issueID: fmt.Sprintf("%d issues", count),
+				action:  "closed",
+				err:     lastErr,
+			}
+		}
+	}
+
 	issue := m.parade.SelectedIssue
 	if issue == nil {
 		return m, nil
@@ -589,8 +665,31 @@ func (m Model) closeSelectedIssue() (tea.Model, tea.Cmd) {
 	}
 }
 
-// setPriority runs bd update to change issue priority.
+// setPriority runs bd update to change issue priority. Works on multi-selection if active.
 func (m Model) setPriority(priority data.Priority) (tea.Model, tea.Cmd) {
+	// Bulk mode
+	if selected := m.parade.SelectedIssues(); len(selected) > 0 {
+		issues := selected
+		count := len(issues)
+		label := fmt.Sprintf("P%d", priority)
+		m.parade.ClearSelection()
+		return m, func() tea.Msg {
+			var lastErr error
+			for _, iss := range issues {
+				if iss.Priority != priority {
+					if err := data.SetPriority(iss.ID, priority); err != nil {
+						lastErr = err
+					}
+				}
+			}
+			return mutateResultMsg{
+				issueID: fmt.Sprintf("%d issues", count),
+				action:  label,
+				err:     lastErr,
+			}
+		}
+	}
+
 	issue := m.parade.SelectedIssue
 	if issue == nil {
 		return m, nil
@@ -745,8 +844,11 @@ func (m *Model) rebuildParade() {
 	}
 
 	filteredIssues := data.FilterIssues(m.issues, m.filterInput.Value())
+	if m.focusMode {
+		filteredIssues = data.FocusFilter(filteredIssues, m.blockingTypes)
+	}
 	groups := m.groups
-	if m.filterInput.Value() != "" {
+	if m.filterInput.Value() != "" || m.focusMode {
 		groups = data.GroupByParade(filteredIssues, m.blockingTypes)
 	}
 
@@ -858,6 +960,10 @@ func (m Model) View() string {
 	var bottomBar string
 	if m.toast.Active() {
 		bottomBar = m.toast.View(m.width)
+	} else if m.parade.SelectionCount() > 0 {
+		// Bulk action bar when items are multi-selected
+		bulkBar := components.BulkFooter(m.width, m.parade.SelectionCount())
+		bottomBar = bulkBar
 	} else if m.filtering || m.filterInput.Value() != "" {
 		bottomBar = lipgloss.NewStyle().
 			Padding(0, 1).

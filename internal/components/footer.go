@@ -128,6 +128,25 @@ func insertBefore(bindings []FooterBinding, key string, extra ...FooterBinding) 
 	return append(bindings, extra...)
 }
 
+// BulkFooter renders the footer bar shown during multi-select.
+func BulkFooter(width, count int) string {
+	label := ui.FooterKey.Render(fmt.Sprintf(" %d selected: ", count))
+	bindings := []FooterBinding{
+		{Key: "1", Desc: "in_progress"},
+		{Key: "2", Desc: "open"},
+		{Key: "3", Desc: "close"},
+		{Key: "X", Desc: "clear"},
+	}
+	var parts []string
+	for _, b := range bindings {
+		key := ui.FooterKey.Render(b.Key)
+		desc := ui.FooterDesc.Render(b.Desc)
+		parts = append(parts, key+" "+desc)
+	}
+	content := label + strings.Join(parts, "  ")
+	return ui.FooterStyle.Width(width).Render(content)
+}
+
 // Divider returns a full-width horizontal divider line.
 func Divider(width int) string {
 	return lipgloss.NewStyle().

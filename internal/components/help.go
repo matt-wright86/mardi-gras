@@ -56,6 +56,7 @@ func (h Help) View() string {
 				{key: "enter", desc: "Focus detail pane"},
 				{key: "c", desc: "Toggle closed issues"},
 				{key: "/", desc: "Enter filter mode (fuzzy)"},
+				{key: "f", desc: "Toggle focus mode (my work + top priority)"},
 				{key: "a", desc: "Launch agent (tmux: new window)"},
 				{key: "A", desc: "Kill active agent on issue"},
 			},
@@ -72,6 +73,15 @@ func (h Help) View() string {
 				{key: "$", desc: "Set priority: P4 (backlog)"},
 				{key: "b", desc: "Copy branch name to clipboard"},
 				{key: "B", desc: "Create + checkout git branch"},
+			},
+		},
+		{
+			title: "MULTI-SELECT",
+			bindings: []helpBinding{
+				{key: "space / x", desc: "Toggle select on cursor issue"},
+				{key: "Shift+J/K", desc: "Select and move down/up"},
+				{key: "X", desc: "Clear all selections"},
+				{key: "1/2/3", desc: "Bulk set status on selected"},
 			},
 		},
 		{
