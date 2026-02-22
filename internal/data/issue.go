@@ -40,10 +40,10 @@ const (
 type ParadeStatus int
 
 const (
-	ParadeRolling    ParadeStatus = iota // in_progress
-	ParadeLinedUp                        // open, not blocked
-	ParadeStalled                        // open, blocked
-	ParadePastTheStand                   // closed
+	ParadeRolling      ParadeStatus = iota // in_progress
+	ParadeLinedUp                          // open, not blocked
+	ParadeStalled                          // open, blocked
+	ParadePastTheStand                     // closed
 )
 
 // Dependency represents a relationship between two issues.
@@ -131,13 +131,14 @@ func (i *Issue) EvaluateDependencies(issueMap map[string]*Issue, blockingTypes m
 		}
 
 		target, exists := issueMap[dep.DependsOnID]
-		if !exists {
+		switch {
+		case !exists:
 			edge.Status = DepMissing
 			eval.MissingIDs = append(eval.MissingIDs, dep.DependsOnID)
-		} else if target.Status == StatusClosed {
+		case target.Status == StatusClosed:
 			edge.Status = DepResolved
 			eval.ResolvedIDs = append(eval.ResolvedIDs, dep.DependsOnID)
-		} else {
+		default:
 			edge.Status = DepBlocking
 			eval.BlockingIDs = append(eval.BlockingIDs, dep.DependsOnID)
 		}

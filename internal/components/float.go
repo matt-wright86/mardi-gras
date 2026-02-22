@@ -12,7 +12,7 @@ func Float(title string, width int) string {
 		BorderForeground(ui.BrightGold).
 		Foreground(ui.BrightPurple).
 		Bold(true).
-		Width(width - 4).
+		Width(width-4).
 		Align(lipgloss.Center).
 		Padding(0, 1)
 

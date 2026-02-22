@@ -275,9 +275,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		switch msg.String() {
 		case "j", "down":
-			m.detail.Viewport.LineDown(1)
+			m.detail.Viewport.ScrollDown(1)
 		case "k", "up":
-			m.detail.Viewport.LineUp(1)
+			m.detail.Viewport.ScrollUp(1)
 		default:
 			m.detail.Viewport, cmd = m.detail.Viewport.Update(msg)
 		}

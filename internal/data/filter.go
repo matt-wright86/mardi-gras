@@ -40,36 +40,37 @@ func matchesAllTokens(issue Issue, tokens []string) bool {
 	for _, token := range tokens {
 		matched := false
 
-		// 1. Check explicit 'type:' tokens
-		if strings.HasPrefix(token, "type:") {
+		switch {
+		case strings.HasPrefix(token, "type:"):
+			// 1. Check explicit 'type:' tokens
 			val := strings.TrimPrefix(token, "type:")
-			if issueType == val {
-				matched = true
-			}
-		} else if strings.HasPrefix(token, "priority:") {
+			matched = issueType == val
+
+		case strings.HasPrefix(token, "priority:"):
 			// 2. Check explicit 'priority:' tokens
 			val := strings.TrimPrefix(token, "priority:")
-			if val == issuePriorityName {
+			switch {
+			case val == issuePriorityName:
 				matched = true
-			} else if val == "0" && issuePriorityLevel == PriorityCritical {
+			case val == "0" && issuePriorityLevel == PriorityCritical:
 				matched = true
-			} else if val == "1" && issuePriorityLevel == PriorityHigh {
+			case val == "1" && issuePriorityLevel == PriorityHigh:
 				matched = true
-			} else if val == "2" && issuePriorityLevel == PriorityMedium {
+			case val == "2" && issuePriorityLevel == PriorityMedium:
 				matched = true
-			} else if val == "3" && issuePriorityLevel == PriorityLow {
+			case val == "3" && issuePriorityLevel == PriorityLow:
 				matched = true
-			} else if val == "4" && issuePriorityLevel == PriorityBacklog {
+			case val == "4" && issuePriorityLevel == PriorityBacklog:
 				matched = true
 			}
-		} else if token == issuePriorityLabel {
+
+		case token == issuePriorityLabel:
 			// 3. Check shorthand priority (p0, p1, etc)
 			matched = true
-		} else {
+
+		default:
 			// 4. Free-text search on ID and Title
-			if strings.Contains(issueID, token) || strings.Contains(issueTitle, token) {
-				matched = true
-			}
+			matched = strings.Contains(issueID, token) || strings.Contains(issueTitle, token)
 		}
 
 		// If any token fails to match, the whole issue fails
