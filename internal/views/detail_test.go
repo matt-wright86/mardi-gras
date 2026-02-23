@@ -554,6 +554,56 @@ func TestFormulaRecommendationRendered(t *testing.T) {
 	}
 }
 
+func TestCrossRigDepsRendered(t *testing.T) {
+	issues := []data.Issue{
+		{ID: "bd-001", Title: "Fix token validation", Status: data.StatusOpen,
+			Priority: data.PriorityMedium, IssueType: data.TypeBug, CreatedAt: time.Now(),
+			Dependencies: []data.Dependency{
+				{IssueID: "bd-001", DependsOnID: "external:gastown:gt-c3f2", Type: "blocks"},
+				{IssueID: "bd-001", DependsOnID: "external:wyvern:wy-e5f6", Type: "related"},
+			},
+		},
+	}
+	d := NewDetail(80, 40, issues)
+	d.SetIssue(&issues[0])
+
+	content := d.renderContent()
+
+	if !strings.Contains(content, "CROSS-RIG") {
+		t.Error("content should contain CROSS-RIG section")
+	}
+	if !strings.Contains(content, "gastown") {
+		t.Error("content should contain rig name 'gastown'")
+	}
+	if !strings.Contains(content, "wyvern") {
+		t.Error("content should contain rig name 'wyvern'")
+	}
+	if !strings.Contains(content, "gt-c3f2") {
+		t.Error("content should contain external issue ID")
+	}
+}
+
+func TestCrossRigDepsNotRenderedForLocalDeps(t *testing.T) {
+	issues := []data.Issue{
+		{ID: "bd-001", Title: "Local issue", Status: data.StatusOpen,
+			Priority: data.PriorityMedium, IssueType: data.TypeTask, CreatedAt: time.Now(),
+			Dependencies: []data.Dependency{
+				{IssueID: "bd-001", DependsOnID: "bd-002", Type: "blocks"},
+			},
+		},
+		{ID: "bd-002", Title: "Another local", Status: data.StatusOpen,
+			Priority: data.PriorityMedium, IssueType: data.TypeTask, CreatedAt: time.Now()},
+	}
+	d := NewDetail(80, 40, issues)
+	d.SetIssue(&issues[0])
+
+	content := d.renderContent()
+
+	if strings.Contains(content, "CROSS-RIG") {
+		t.Error("content should not contain CROSS-RIG section for local-only deps")
+	}
+}
+
 func TestFormulaRecommendationNotRenderedForClosed(t *testing.T) {
 	issues := []data.Issue{
 		{ID: "bd-001", Title: "Add authentication middleware", Status: data.StatusClosed,

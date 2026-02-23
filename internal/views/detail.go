@@ -378,6 +378,22 @@ func (d *Detail) renderContent() string {
 		}
 	}
 
+	// Cross-rig dependencies (external references)
+	crossRigRefs := data.CrossRigDeps(issue)
+	if len(crossRigRefs) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, ui.DetailSection.Render("CROSS-RIG"))
+		for _, ref := range crossRigRefs {
+			rigStyle := lipgloss.NewStyle().Foreground(ui.BrightPurple).Bold(true)
+			idStyle := lipgloss.NewStyle().Foreground(ui.Light)
+			lines = append(lines, fmt.Sprintf("  %s %s %s %s",
+				ui.DepArrow,
+				rigStyle.Render(ref.Rig),
+				idStyle.Render(ref.IssueID),
+				lipgloss.NewStyle().Foreground(ui.Dim).Render("(external)")))
+		}
+	}
+
 	// Gate status (when agent is awaiting-gate)
 	if gateSection := d.renderGateStatus(); gateSection != "" {
 		lines = append(lines, "")
