@@ -66,4 +66,12 @@ const (
 	SymProgress      = "█"
 	SymProgressEmpty = "░"
 	SymTown          = "⛽"
+
+	// Molecule steps
+	SymStepDone    = "✓"
+	SymStepActive  = "●"
+	SymStepReady   = "○"
+	SymStepBlocked = "⊘"
+	SymStepSkipped = "─"
+	SymTierLine    = "│"
 )

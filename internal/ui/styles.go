@@ -166,6 +166,24 @@ var (
 	FooterSource = lipgloss.NewStyle().
 			Foreground(Muted)
 
+	// Molecule step styles
+	MolStepDone = lipgloss.NewStyle().
+			Foreground(BrightGreen)
+
+	MolStepActive = lipgloss.NewStyle().
+			Foreground(BrightGold).
+			Bold(true)
+
+	MolStepReady = lipgloss.NewStyle().
+			Foreground(Light)
+
+	MolStepBlocked = lipgloss.NewStyle().
+			Foreground(StatusStalled)
+
+	MolTierLabel = lipgloss.NewStyle().
+			Foreground(Dim).
+			Italic(true)
+
 	// Filter Input
 	InputPrompt = lipgloss.NewStyle().
 			Foreground(BrightGold).

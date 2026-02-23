@@ -3,8 +3,10 @@ package views
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/matt-wright86/mardi-gras/internal/data"
+	"github.com/matt-wright86/mardi-gras/internal/gastown"
 )
 
 func TestParadeLabel(t *testing.T) {
@@ -119,5 +121,202 @@ func TestSetSizeUpdatesDimensions(t *testing.T) {
 	}
 	if d.Viewport.Height != 30 {
 		t.Fatalf("Viewport.Height = %d, want 30", d.Viewport.Height)
+	}
+}
+
+func TestSetMolecule(t *testing.T) {
+	issues := []data.Issue{
+		{ID: "mg-001", Title: "Test Issue", Status: data.StatusInProgress, Priority: data.PriorityMedium, IssueType: data.TypeTask, CreatedAt: time.Now()},
+	}
+	d := NewDetail(80, 30, issues)
+	d.SetIssue(&issues[0])
+
+	dag := &gastown.DAGInfo{
+		RootID:    "mg-001",
+		RootTitle: "Test Issue",
+		Nodes: map[string]*gastown.DAGNode{
+			"s1": {ID: "s1", Title: "Design", Status: "done", Tier: 0},
+			"s2": {ID: "s2", Title: "Implement", Status: "in_progress", Tier: 1},
+		},
+		TierGroups: [][]string{{"s1"}, {"s2"}},
+	}
+	progress := &gastown.MoleculeProgress{
+		TotalSteps: 3,
+		DoneSteps:  1,
+		Percent:    33,
+	}
+
+	d.SetMolecule("mg-001", dag, progress)
+
+	if d.MoleculeDAG != dag {
+		t.Fatal("MoleculeDAG not set")
+	}
+	if d.MoleculeProgress != progress {
+		t.Fatal("MoleculeProgress not set")
+	}
+	if d.MoleculeIssueID != "mg-001" {
+		t.Fatalf("MoleculeIssueID = %q, want %q", d.MoleculeIssueID, "mg-001")
+	}
+}
+
+func TestSetMoleculeClearsOnIssueChange(t *testing.T) {
+	issues := []data.Issue{
+		{ID: "mg-001", Title: "Issue 1", Status: data.StatusInProgress, Priority: data.PriorityMedium, IssueType: data.TypeTask, CreatedAt: time.Now()},
+		{ID: "mg-002", Title: "Issue 2", Status: data.StatusOpen, Priority: data.PriorityMedium, IssueType: data.TypeTask, CreatedAt: time.Now()},
+	}
+	d := NewDetail(80, 30, issues)
+	d.SetIssue(&issues[0])
+
+	dag := &gastown.DAGInfo{
+		RootID: "mg-001",
+		Nodes:  map[string]*gastown.DAGNode{"s1": {ID: "s1", Status: "done"}},
+	}
+	d.SetMolecule("mg-001", dag, nil)
+
+	// Switch to a different issue
+	d.SetIssue(&issues[1])
+
+	if d.MoleculeDAG != nil {
+		t.Fatal("MoleculeDAG should be cleared when switching issues")
+	}
+	if d.MoleculeIssueID != "" {
+		t.Fatalf("MoleculeIssueID should be empty, got %q", d.MoleculeIssueID)
+	}
+}
+
+func TestMoleculeRenderingInContent(t *testing.T) {
+	issues := []data.Issue{
+		{ID: "mg-001", Title: "Test Issue", Status: data.StatusInProgress, Priority: data.PriorityMedium, IssueType: data.TypeTask, CreatedAt: time.Now()},
+	}
+	d := NewDetail(80, 40, issues)
+	d.SetIssue(&issues[0])
+
+	dag := &gastown.DAGInfo{
+		RootID:    "mg-001",
+		RootTitle: "Build Feature",
+		Nodes: map[string]*gastown.DAGNode{
+			"s1": {ID: "s1", Title: "Design", Status: "done", Tier: 0},
+			"s2": {ID: "s2", Title: "Implement", Status: "in_progress", Tier: 1},
+			"s3": {ID: "s3", Title: "Test", Status: "blocked", Tier: 2, Dependencies: []string{"s2"}},
+		},
+		TierGroups: [][]string{{"s1"}, {"s2"}, {"s3"}},
+	}
+	progress := &gastown.MoleculeProgress{
+		TotalSteps: 3,
+		DoneSteps:  1,
+		Percent:    33,
+	}
+	d.SetMolecule("mg-001", dag, progress)
+
+	content := d.renderContent()
+
+	if !strings.Contains(content, "MOLECULE") {
+		t.Error("content should contain MOLECULE section")
+	}
+	if !strings.Contains(content, "Design") {
+		t.Error("content should contain step title 'Design'")
+	}
+	if !strings.Contains(content, "Implement") {
+		t.Error("content should contain step title 'Implement'")
+	}
+	if !strings.Contains(content, "done") {
+		t.Error("content should contain 'done' status")
+	}
+	if !strings.Contains(content, "in_progress") {
+		t.Error("content should contain 'in_progress' status")
+	}
+}
+
+func TestActivityRenderingInContent(t *testing.T) {
+	created := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
+	updated := time.Date(2025, 1, 16, 14, 30, 0, 0, time.UTC)
+	issues := []data.Issue{
+		{ID: "mg-001", Title: "Test Issue", Status: data.StatusInProgress,
+			Priority: data.PriorityMedium, IssueType: data.TypeTask,
+			CreatedAt: created, UpdatedAt: updated},
+	}
+	d := NewDetail(80, 40, issues)
+	d.SetIssue(&issues[0])
+
+	content := d.renderContent()
+
+	if !strings.Contains(content, "ACTIVITY") {
+		t.Error("content should contain ACTIVITY section")
+	}
+	if !strings.Contains(content, "Created") {
+		t.Error("content should contain 'Created' event")
+	}
+	if !strings.Contains(content, "Updated") {
+		t.Error("content should contain 'Updated' event")
+	}
+}
+
+func TestActivityWithAgent(t *testing.T) {
+	issues := []data.Issue{
+		{ID: "mg-001", Title: "Test Issue", Status: data.StatusInProgress,
+			Priority: data.PriorityMedium, IssueType: data.TypeTask,
+			CreatedAt: time.Now()},
+	}
+	d := NewDetail(80, 40, issues)
+	d.ActiveAgents = map[string]string{"mg-001": "polecat-1"}
+	d.TownStatus = &gastown.TownStatus{
+		Agents: []gastown.AgentRuntime{
+			{Name: "polecat-1", Role: "polecat", State: "working", HookBead: "mg-001"},
+		},
+	}
+	d.SetIssue(&issues[0])
+
+	content := d.renderContent()
+
+	if !strings.Contains(content, "polecat-1") {
+		t.Error("content should show agent name in activity")
+	}
+}
+
+func TestActivityWithClosedIssue(t *testing.T) {
+	created := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
+	closed := time.Date(2025, 1, 17, 9, 0, 0, 0, time.UTC)
+	issues := []data.Issue{
+		{ID: "mg-001", Title: "Test Issue", Status: data.StatusClosed,
+			Priority: data.PriorityMedium, IssueType: data.TypeTask,
+			CreatedAt: created, ClosedAt: &closed},
+	}
+	d := NewDetail(80, 40, issues)
+	d.SetIssue(&issues[0])
+
+	content := d.renderContent()
+
+	if !strings.Contains(content, "Closed") {
+		t.Error("content should contain 'Closed' event")
+	}
+}
+
+func TestMoleculeProgressBar(t *testing.T) {
+	bar := moleculeProgressBar(3, 10, 20)
+	if bar == "" {
+		t.Fatal("progress bar should not be empty")
+	}
+	if len([]rune(bar)) == 0 {
+		t.Fatal("progress bar should have characters")
+	}
+
+	// Edge cases
+	emptyBar := moleculeProgressBar(0, 0, 10)
+	if emptyBar == "" {
+		t.Fatal("zero-total bar should not be empty")
+	}
+}
+
+func TestFormatTime(t *testing.T) {
+	ts := time.Date(2025, 2, 15, 14, 30, 0, 0, time.UTC)
+	got := formatTime(ts)
+	if !strings.Contains(got, "Feb 15") {
+		t.Errorf("formatTime should contain date, got %q", got)
+	}
+
+	// Zero time
+	zero := formatTime(time.Time{})
+	if strings.TrimSpace(zero) != "" {
+		t.Errorf("zero time should be blank, got %q", zero)
 	}
 }

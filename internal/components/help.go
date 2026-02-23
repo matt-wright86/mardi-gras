@@ -96,6 +96,7 @@ func (h Help) View() string {
 				{key: "/", desc: "Enter filter mode"},
 				{key: "a", desc: "Launch agent (tmux: new window)"},
 				{key: "A", desc: "Kill active agent on issue"},
+				{key: "m", desc: "Mark active molecule step done"},
 			},
 		},
 		{

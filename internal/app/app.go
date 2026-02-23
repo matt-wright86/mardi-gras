@@ -257,6 +257,18 @@ type mailMarkReadResultMsg struct {
 	err       error
 }
 
+type moleculeDAGMsg struct {
+	issueID  string
+	dag      *gastown.DAGInfo
+	progress *gastown.MoleculeProgress
+	err      error
+}
+
+type moleculeStepDoneMsg struct {
+	result *gastown.StepDoneResult
+	err    error
+}
+
 // mutateResultMsg is sent when a bd CLI mutation completes.
 type mutateResultMsg struct {
 	issueID string
@@ -514,6 +526,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.showGasTown {
 				m.gasTown.SetStatus(m.townStatus, m.gtEnv)
 			}
+			// Check if selected issue now has an agent → fetch molecule
+			if cmd := m.maybeFetchMolecule(); cmd != nil {
+				return m, cmd
+			}
 		}
 		return m, nil
 
@@ -757,6 +773,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, fetchMailInbox
 		}
 		return m, nil
+
+	case moleculeDAGMsg:
+		if msg.err == nil && msg.dag != nil {
+			// Only apply if still viewing the same issue
+			if m.detail.Issue != nil && m.detail.Issue.ID == msg.issueID {
+				m.detail.SetMolecule(msg.issueID, msg.dag, msg.progress)
+			}
+		}
+		return m, nil
+
+	case moleculeStepDoneMsg:
+		if msg.err != nil {
+			toast, cmd := components.ShowToast(
+				fmt.Sprintf("Step done failed: %s", msg.err),
+				components.ToastError, toastDuration,
+			)
+			m.toast = toast
+			return m, cmd
+		}
+		label := fmt.Sprintf("Step %s done", msg.result.StepID)
+		if msg.result.Complete {
+			label = "Molecule complete!"
+		} else if msg.result.NextStepTitle != "" {
+			label = fmt.Sprintf("Step done, next: %s", msg.result.NextStepTitle)
+		}
+		toast, cmd := components.ShowToast(label, components.ToastSuccess, toastDuration)
+		m.toast = toast
+		// Re-fetch molecule data to reflect the change
+		cmds := []tea.Cmd{cmd}
+		if m.detail.Issue != nil && m.detail.MoleculeIssueID != "" {
+			issueID := m.detail.Issue.ID
+			cmds = append(cmds, fetchMoleculeDAG(issueID))
+		}
+		return m, tea.Batch(cmds...)
 
 	case views.GasTownActionMsg:
 		return m.handleGasTownAction(msg)
@@ -1165,6 +1215,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m.activPane = PaneDetail
 			m.detail.Focused = true
+			if cmd := m.maybeFetchMolecule(); cmd != nil {
+				return m, cmd
+			}
 		}
 		return m, nil
 	}
@@ -1182,6 +1235,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.detail.Viewport.ScrollDown(1)
 		case "k", "up":
 			m.detail.Viewport.ScrollUp(1)
+		case "m":
+			// Mark current molecule step as done
+			if m.detail.MoleculeDAG != nil {
+				stepID := m.detail.MoleculeDAG.ActiveStepID()
+				if stepID != "" {
+					return m, func() tea.Msg {
+						result, err := gastown.MoleculeStepDone(stepID)
+						return moleculeStepDoneMsg{result: result, err: err}
+					}
+				}
+			}
 		default:
 			m.detail.Viewport, cmd = m.detail.Viewport.Update(msg)
 		}
@@ -1590,6 +1654,24 @@ func (m *Model) syncSelection() {
 	}
 }
 
+// maybeFetchMolecule returns a Cmd to fetch molecule data if the selected issue
+// has an active agent with a hooked bead (molecule attachment).
+func (m *Model) maybeFetchMolecule() tea.Cmd {
+	issue := m.parade.SelectedIssue
+	if issue == nil || !m.gtEnv.Available {
+		return nil
+	}
+	// Only fetch if the issue has an active agent
+	if _, active := m.activeAgents[issue.ID]; !active {
+		return nil
+	}
+	// Don't re-fetch if we already have data for this issue
+	if m.detail.MoleculeIssueID == issue.ID && m.detail.MoleculeDAG != nil {
+		return nil
+	}
+	return fetchMoleculeDAG(issue.ID)
+}
+
 // layout recalculates dimensions for all sub-components.
 func (m *Model) layout() {
 	headerH := 2
@@ -1759,6 +1841,18 @@ func fetchConvoyList() tea.Msg {
 func fetchMailInbox() tea.Msg {
 	msgs, err := gastown.MailInbox(false)
 	return mailInboxMsg{messages: msgs, err: err}
+}
+
+// fetchMoleculeDAG returns a Cmd that fetches molecule DAG and progress for an issue.
+func fetchMoleculeDAG(issueID string) tea.Cmd {
+	return func() tea.Msg {
+		dag, dagErr := gastown.MoleculeDAG(issueID)
+		if dagErr != nil {
+			return moleculeDAGMsg{issueID: issueID, err: dagErr}
+		}
+		progress, _ := gastown.MoleculeProgressFetch(issueID)
+		return moleculeDAGMsg{issueID: issueID, dag: dag, progress: progress}
+	}
 }
 
 // View implements tea.Model.
