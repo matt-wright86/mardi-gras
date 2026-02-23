@@ -284,6 +284,11 @@ type costsMsg struct {
 	err   error
 }
 
+type activityMsg struct {
+	events []gastown.Event
+	err    error
+}
+
 // mutateResultMsg is sent when a bd CLI mutation completes.
 type mutateResultMsg struct {
 	issueID string
@@ -840,6 +845,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case activityMsg:
+		if msg.err == nil && len(msg.events) > 0 {
+			m.gasTown.SetEvents(msg.events)
+		}
+		return m, nil
+
 	case views.GasTownActionMsg:
 		return m.handleGasTownAction(msg)
 
@@ -1018,7 +1029,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.showGasTown {
 			m.showProblems = false
 			m.gasTown.SetStatus(m.townStatus, m.gtEnv)
-			cmds := []tea.Cmd{fetchConvoyList, fetchMailInbox, fetchCosts}
+			cmds := []tea.Cmd{fetchConvoyList, fetchMailInbox, fetchCosts, fetchActivity}
 			if m.townStatus == nil {
 				cmds = append(cmds, pollAgentState(m.gtEnv, m.inTmux))
 			}
@@ -1931,6 +1942,12 @@ func fetchComments(issueID string) tea.Cmd {
 func fetchCosts() tea.Msg {
 	costs, err := gastown.FetchCosts()
 	return costsMsg{costs: costs, err: err}
+}
+
+func fetchActivity() tea.Msg {
+	path := gastown.EventsPath()
+	events, err := gastown.LoadRecentEvents(path, 20)
+	return activityMsg{events: events, err: err}
 }
 
 // fetchMoleculeDAG returns a Cmd that fetches molecule DAG and progress for an issue.

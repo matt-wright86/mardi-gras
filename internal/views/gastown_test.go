@@ -988,3 +988,38 @@ func TestGasTownNoCostsSection(t *testing.T) {
 		t.Fatal("view should not contain COSTS section when no data")
 	}
 }
+
+func TestGasTownSetEvents(t *testing.T) {
+	g := NewGasTown(100, 30)
+	status := &gastown.TownStatus{Agents: []gastown.AgentRuntime{}}
+	g.SetStatus(status, gastown.Env{Available: true})
+
+	events := []gastown.Event{
+		{Timestamp: "2026-02-23T01:00:00Z", Type: "session_start", Actor: "mayor"},
+		{Timestamp: "2026-02-23T01:05:00Z", Type: "sling", Actor: "mayor"},
+	}
+	g.SetEvents(events)
+
+	view := g.View()
+	if !strings.Contains(view, "ACTIVITY") {
+		t.Fatal("view should contain ACTIVITY section")
+	}
+	if !strings.Contains(view, "session") {
+		t.Fatal("view should contain 'session' label")
+	}
+	if !strings.Contains(view, "sling") {
+		t.Fatal("view should contain 'sling' label")
+	}
+}
+
+func TestGasTownNoActivitySection(t *testing.T) {
+	g := NewGasTown(100, 30)
+	status := &gastown.TownStatus{Agents: []gastown.AgentRuntime{}}
+	g.SetStatus(status, gastown.Env{Available: true})
+
+	// No events set
+	view := g.View()
+	if strings.Contains(view, "ACTIVITY") {
+		t.Fatal("view should not contain ACTIVITY section when no events")
+	}
+}

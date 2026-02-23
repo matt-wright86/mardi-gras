@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -49,6 +50,9 @@ type GasTown struct {
 
 	// Costs data
 	costs *gastown.CostsOutput
+
+	// Activity feed
+	events []gastown.Event
 }
 
 // NewGasTown creates a Gas Town panel.
@@ -124,6 +128,16 @@ func (g *GasTown) SetMailMessages(msgs []gastown.MailMessage) {
 // SetCosts updates the cost data from gt costs --json.
 func (g *GasTown) SetCosts(costs *gastown.CostsOutput) {
 	g.costs = costs
+}
+
+// GetCosts returns the current cost data for velocity computation.
+func (g *GasTown) GetCosts() *gastown.CostsOutput {
+	return g.costs
+}
+
+// SetEvents updates the activity event feed.
+func (g *GasTown) SetEvents(events []gastown.Event) {
+	g.events = events
 }
 
 // SelectedMail returns the currently selected mail message, or nil if none.
@@ -426,6 +440,10 @@ func (g *GasTown) renderContent() string {
 
 	if g.costs != nil {
 		sections = append(sections, g.renderCosts(contentWidth))
+	}
+
+	if len(g.events) > 0 {
+		sections = append(sections, g.renderActivity(contentWidth))
 	}
 
 	// Hint bar at bottom
@@ -843,6 +861,139 @@ func (g *GasTown) renderCosts(width int) string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// renderActivity renders the activity feed section.
+func (g *GasTown) renderActivity(width int) string {
+	var lines []string
+
+	header := fmt.Sprintf("ACTIVITY%s",
+		lipgloss.NewStyle().Foreground(ui.Muted).Render(
+			fmt.Sprintf("  last %d events", len(g.events))))
+	lines = append(lines, ui.GasTownTitle.Render(header))
+
+	for _, ev := range g.events {
+		ts := formatEventTime(ev.Timestamp)
+		label := eventLabel(ev)
+		detail := eventDetail(ev, width-24)
+
+		tsStyle := lipgloss.NewStyle().Foreground(ui.Dim)
+		labelStyle := lipgloss.NewStyle().Foreground(ui.BrightGold)
+		detailStyle := lipgloss.NewStyle().Foreground(ui.Light)
+
+		line := fmt.Sprintf("  %s  %s  %s",
+			tsStyle.Render(fmt.Sprintf("%-8s", ts)),
+			labelStyle.Render(fmt.Sprintf("%-10s", label)),
+			detailStyle.Render(truncateGT(detail, width-24)))
+		lines = append(lines, line)
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// eventLabel returns a short label for an event type.
+func eventLabel(ev gastown.Event) string {
+	switch ev.Type {
+	case "session_start":
+		return "session"
+	case "session_death":
+		return "death"
+	case "sling":
+		return "sling"
+	case "nudge":
+		return "nudge"
+	case "handoff":
+		return "handoff"
+	case "spawn":
+		return "spawn"
+	case "patrol_started":
+		return "patrol"
+	default:
+		return ev.Type
+	}
+}
+
+// eventDetail extracts a human-readable detail from the event payload.
+func eventDetail(ev gastown.Event, _ int) string {
+	actor := shortenActor(ev.Actor)
+	switch ev.Type {
+	case "sling":
+		target := gastown.EventPayloadString(ev, "target")
+		bead := gastown.EventPayloadString(ev, "bead")
+		if target != "" {
+			detail := actor + " -> " + shortenActor(target)
+			if bead != "" {
+				detail += "  " + bead
+			}
+			return detail
+		}
+	case "nudge":
+		target := gastown.EventPayloadString(ev, "target")
+		reason := gastown.EventPayloadString(ev, "reason")
+		if target != "" {
+			detail := actor + " -> " + shortenActor(target)
+			if reason != "" {
+				if len(reason) > 30 {
+					reason = reason[:27] + "..."
+				}
+				detail += "  \"" + reason + "\""
+			}
+			return detail
+		}
+	case "session_start":
+		topic := gastown.EventPayloadString(ev, "topic")
+		if topic != "" {
+			return actor + " started (" + topic + ")"
+		}
+		return actor + " started"
+	case "session_death":
+		reason := gastown.EventPayloadString(ev, "reason")
+		if reason != "" {
+			return actor + " (" + reason + ")"
+		}
+		return actor
+	case "handoff":
+		subject := gastown.EventPayloadString(ev, "subject")
+		if subject != "" {
+			return actor + ": " + subject
+		}
+		return actor
+	case "spawn":
+		polecat := gastown.EventPayloadString(ev, "polecat")
+		if polecat != "" {
+			return actor + " -> " + polecat
+		}
+		return actor
+	}
+	return actor
+}
+
+// shortenActor strips common prefixes for compact display.
+func shortenActor(s string) string {
+	// Already short
+	if len(s) <= 16 {
+		return s
+	}
+	return s
+}
+
+// formatEventTime formats an RFC3339 timestamp as a relative time string.
+func formatEventTime(ts string) string {
+	t, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		return ts
+	}
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	}
 }
 
 func (g *GasTown) renderHints() string {
