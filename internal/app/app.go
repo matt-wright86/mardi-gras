@@ -504,6 +504,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastFileMod = msg.LastMod
 		}
 		m.rebuildParade()
+		m.recomputeVelocity()
 		return m, tea.Batch(cmds...)
 
 	case data.FileUnchangedMsg:
@@ -545,6 +546,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.propagateAgentState()
 			if m.showGasTown {
 				m.gasTown.SetStatus(m.townStatus, m.gtEnv)
+				m.recomputeVelocity()
 			}
 			if m.showProblems {
 				m.problems.SetProblems(gastown.DetectProblems(m.townStatus))
@@ -842,6 +844,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case costsMsg:
 		if msg.err == nil && msg.costs != nil {
 			m.gasTown.SetCosts(msg.costs)
+			m.recomputeVelocity()
 		}
 		return m, nil
 
@@ -1883,6 +1886,16 @@ func (m *Model) restoreParadeSelection(issueID string) {
 		}
 		return
 	}
+}
+
+// recomputeVelocity recalculates velocity metrics from current data
+// and pushes them to the Gas Town panel (only when visible).
+func (m *Model) recomputeVelocity() {
+	if !m.showGasTown {
+		return
+	}
+	v := gastown.ComputeVelocity(m.issues, m.townStatus, m.gasTown.GetCosts())
+	m.gasTown.SetVelocity(v)
 }
 
 // propagateAgentState pushes active agent info to all sub-views.

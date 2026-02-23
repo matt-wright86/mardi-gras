@@ -53,6 +53,9 @@ type GasTown struct {
 
 	// Activity feed
 	events []gastown.Event
+
+	// Velocity metrics
+	velocity *gastown.VelocityMetrics
 }
 
 // NewGasTown creates a Gas Town panel.
@@ -138,6 +141,11 @@ func (g *GasTown) GetCosts() *gastown.CostsOutput {
 // SetEvents updates the activity event feed.
 func (g *GasTown) SetEvents(events []gastown.Event) {
 	g.events = events
+}
+
+// SetVelocity updates the velocity metrics.
+func (g *GasTown) SetVelocity(v *gastown.VelocityMetrics) {
+	g.velocity = v
 }
 
 // SelectedMail returns the currently selected mail message, or nil if none.
@@ -444,6 +452,10 @@ func (g *GasTown) renderContent() string {
 
 	if len(g.events) > 0 {
 		sections = append(sections, g.renderActivity(contentWidth))
+	}
+
+	if g.velocity != nil {
+		sections = append(sections, g.renderVelocity(contentWidth))
 	}
 
 	// Hint bar at bottom
@@ -858,6 +870,50 @@ func (g *GasTown) renderCosts(width int) string {
 		lines = append(lines, tokenStyle.Render(
 			fmt.Sprintf("  tokens: %dk in / %dk out",
 				c.Total.InputTokens/1000, c.Total.OutputTokens/1000)))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// renderVelocity renders the workflow velocity metrics section.
+func (g *GasTown) renderVelocity(_ int) string {
+	v := g.velocity
+	var lines []string
+
+	lines = append(lines, ui.GasTownTitle.Render("VELOCITY"))
+
+	// Issues line
+	labelStyle := lipgloss.NewStyle().Foreground(ui.Dim)
+	valStyle := lipgloss.NewStyle().Foreground(ui.Light)
+	greenStyle := lipgloss.NewStyle().Foreground(ui.BrightGreen)
+
+	issuesLine := fmt.Sprintf("  %s +%d today (+%d week)   %s %d today (%d week)   %s %d open",
+		labelStyle.Render("Issues"),
+		v.CreatedToday, v.CreatedWeek,
+		greenStyle.Render("closed"),
+		v.ClosedToday, v.ClosedWeek,
+		valStyle.Render(""),
+		v.OpenCount)
+	lines = append(lines, issuesLine)
+
+	// Agents line
+	if v.TotalAgents > 0 {
+		pct := 0
+		if v.TotalAgents > 0 {
+			pct = v.WorkingAgents * 100 / v.TotalAgents
+		}
+		agentsLine := fmt.Sprintf("  %s %d/%d working (%d%%)",
+			labelStyle.Render("Agents"),
+			v.WorkingAgents, v.TotalAgents, pct)
+		lines = append(lines, agentsLine)
+	}
+
+	// Cost line
+	if v.TodayCost > 0 || v.TodaySessions > 0 {
+		costLine := fmt.Sprintf("  %s $%.2f today   %d sessions",
+			labelStyle.Render("Cost  "),
+			v.TodayCost, v.TodaySessions)
+		lines = append(lines, costLine)
 	}
 
 	return strings.Join(lines, "\n")

@@ -1012,6 +1012,51 @@ func TestGasTownSetEvents(t *testing.T) {
 	}
 }
 
+func TestGasTownSetVelocity(t *testing.T) {
+	g := NewGasTown(100, 30)
+	status := &gastown.TownStatus{Agents: []gastown.AgentRuntime{}}
+	g.SetStatus(status, gastown.Env{Available: true})
+
+	v := &gastown.VelocityMetrics{
+		OpenCount:     18,
+		ClosedToday:   3,
+		ClosedWeek:    8,
+		CreatedToday:  4,
+		CreatedWeek:   12,
+		TotalAgents:   5,
+		WorkingAgents: 3,
+		TodayCost:     7.84,
+		TodaySessions: 6,
+	}
+	g.SetVelocity(v)
+
+	view := g.View()
+	if !strings.Contains(view, "VELOCITY") {
+		t.Fatal("view should contain VELOCITY section")
+	}
+	if !strings.Contains(view, "18 open") {
+		t.Fatal("view should contain '18 open'")
+	}
+	if !strings.Contains(view, "3/5 working") {
+		t.Fatal("view should contain '3/5 working'")
+	}
+	if !strings.Contains(view, "7.84") {
+		t.Fatal("view should contain cost '7.84'")
+	}
+}
+
+func TestGasTownNoVelocitySection(t *testing.T) {
+	g := NewGasTown(100, 30)
+	status := &gastown.TownStatus{Agents: []gastown.AgentRuntime{}}
+	g.SetStatus(status, gastown.Env{Available: true})
+
+	// No velocity set
+	view := g.View()
+	if strings.Contains(view, "VELOCITY") {
+		t.Fatal("view should not contain VELOCITY section when no data")
+	}
+}
+
 func TestGasTownNoActivitySection(t *testing.T) {
 	g := NewGasTown(100, 30)
 	status := &gastown.TownStatus{Agents: []gastown.AgentRuntime{}}
