@@ -20,6 +20,7 @@ internal/
     loader.go             JSONL parsing, sorting, parade grouping
     filter.go             Query filtering (type:, priority:, free-text)
     watcher.go            File polling (1.2s interval, change detection)
+    source.go             Data source abstraction (JSONL vs CLI), bd list fetcher
     focus.go              Focus mode filtering (my work + top priority)
     mutate.go             Issue mutations via bd CLI (status, priority, create)
     crossrig.go           Cross-rig dependency detection and rendering
@@ -146,9 +147,10 @@ type Model struct {
     creating      bool               // issue creation form visible?
     focusMode     bool               // focus mode active?
 
-    // File watching
-    watchPath     string
-    lastFileMod   time.Time
+    // Data source
+    sourceMode    data.SourceMode    // JSONL file watching or CLI polling
+    watchPath     string             // JSONL path (SourceJSONL only)
+    lastFileMod   time.Time          // last known modtime (JSONL only)
 
     // Agent integration
     claudeAvail   bool
@@ -174,7 +176,7 @@ type Model struct {
 ### Lifecycle
 
 **Init()** starts two concurrent commands:
-- `data.WatchFile(path, lastMod)` — polls the JSONL file every 1.2s
+- `m.startPoll()` — JSONL mode: `data.WatchFile(path, lastMod)` polls every 1.2s; CLI mode: `data.PollCLI()` runs `bd list --json` every 5s
 - `pollAgentState(gtEnv, inTmux)` — queries tmux or `gt status --json` for agent state
 
 **Update(msg)** routes messages. The full message set:
@@ -186,7 +188,7 @@ type Model struct {
 | **File watching** | |
 | `data.FileChangedMsg` | Reload issues, rebuild parade groups, diff for change indicators |
 | `data.FileUnchangedMsg` | Reschedule watcher |
-| `data.FileWatchErrorMsg` | Log and reschedule |
+| `data.FileWatchErrorMsg` | JSONL: log and reschedule. CLI: show error toast and reschedule |
 | **Agent** | |
 | `agentLaunchedMsg` | Track new agent window |
 | `agentLaunchErrorMsg` | Show toast with error |
@@ -274,19 +276,21 @@ type Model struct {
 Parse flags (--path, --block-types, --status, --version)
     |
     v
-Resolve JSONL path:
-  --path flag given?  -->  use it
-  otherwise           -->  walk up from cwd until .beads/issues.jsonl found
+resolveSource(cwd, pathFlag):
+  --path flag given?          --> SourceJSONL (explicit)
+  .beads/issues.jsonl found?  --> SourceJSONL (auto-detected, walk up dirs)
+  .beads/ dir + bd on PATH?   --> SourceCLI (fallback for bd 0.56+)
+  none of the above           --> exit with error
     |
     v
-data.LoadIssues(path)
-  Open file, scan line by line, JSON unmarshal each into data.Issue
-  SortIssues: active first, then by priority (asc), then by recency
+Initial load based on source.Mode:
+  SourceJSONL: data.LoadIssues(path)
+  SourceCLI:   data.FetchIssuesCLI()  (bd list --json --limit 0 --all)
     |
     v
 --status mode?
   yes --> data.GroupByParade() --> tmux.StatusLine() --> print and exit
-  no  --> app.New(issues, path, ...) --> tea.NewProgram(model).Run()
+  no  --> app.New(issues, source, ...) --> tea.NewProgram(model).Run()
 ```
 
 ### 2. Parade grouping (data/loader.go)
@@ -321,20 +325,15 @@ DepEval.IsBlocked = len(BlockingIDs) > 0 || len(MissingIDs) > 0
 
 Eight dependency types are supported: blocks, blocked-by, related, duplicates, supersedes, parent-child, discovered-from, depends-on. The `--block-types` flag controls which types are treated as blockers (default: `blocks` only).
 
-### 4. Live updates (data/watcher.go)
+### 4. Live updates (data/watcher.go, source.go)
 
-The watcher is a BubbleTea `Cmd` that polls via `tea.Tick`:
+Two polling strategies, selected by `sourceMode`:
 
-```
-WatchFile(path, lastMod):
-  sleep 1.2s
-  stat the file
-    modtime changed? --> LoadIssues, emit FileChangedMsg
-    unchanged?       --> emit FileUnchangedMsg
-    error?           --> emit FileWatchErrorMsg
+**JSONL mode** (`data.WatchFile`): polls file modtime every 1.2s, emits `FileChangedMsg` on change, `FileUnchangedMsg` when unchanged.
 
-app.Update handles the msg, reschedules WatchFile for the next cycle
-```
+**CLI mode** (`data.PollCLI`): runs `bd list --json --limit 0 --all` every 5s, always emits `FileChangedMsg` (the app's `diffIssues()` detects no-ops). Errors emit `FileWatchErrorMsg` and show a toast.
+
+Both use `startPoll()` and `startPollImmediate()` helpers so message handlers are mode-agnostic. After mutations (status change, issue create), `startPollImmediate()` triggers an instant re-fetch regardless of mode.
 
 On `FileChangedMsg`, the app reloads issues, rebuilds parade groups, diffs against `prevIssueMap` to detect status changes (for change indicator badges), and syncs the selected issue — preserving cursor position and scroll state.
 
@@ -511,3 +510,52 @@ Plus:
 | Package | Purpose |
 |---|---|
 | `atotto/clipboard` | Cross-platform clipboard access (branch name copy) |
+
+## Data Source Abstraction
+
+The `data/source.go` file defines the abstraction that lets mg load issues from different backends:
+
+```go
+type SourceMode int
+
+const (
+    SourceJSONL SourceMode = iota  // Read from .beads/issues.jsonl
+    SourceCLI                       // Shell out to bd list --json
+)
+
+type Source struct {
+    Mode       SourceMode
+    Path       string  // JSONL file path (SourceJSONL) or empty (SourceCLI)
+    ProjectDir string  // Project root directory
+    Explicit   bool    // True if --path was used
+}
+```
+
+`Source.Label()` returns a display string for the footer ("issues.jsonl" or "bd list").
+
+### Adding a new source mode
+
+To add a new mode (e.g., `SourceDolt` for direct Dolt MySQL connection):
+
+1. Add constant to `SourceMode` in `data/source.go`
+2. Add fetch function returning `([]Issue, error)` in `data/source.go`
+3. Add poll function returning `tea.Cmd` in `data/watcher.go`
+4. Extend `startPoll()` / `startPollImmediate()` in `internal/app/app.go`
+5. Add case to `resolveSource()` in `cmd/mg/main.go`
+6. Update `Source.Label()` for footer display
+
+All modes emit the same `FileChangedMsg` / `FileWatchErrorMsg`, so the app layer is mode-agnostic.
+
+## Architectural Frontier
+
+### Phase 2: Direct Dolt Connection (`SourceDolt`)
+
+Direct MySQL connection to the Dolt SQL server for sub-second polling, incremental diffs, richer queries (e.g., closed-since, changed-fields), and eliminating the `bd` CLI as a runtime dependency. The extension point already exists via `SourceMode` — add `SourceDolt`, a fetch function using `database/sql`, and a poll Cmd.
+
+### Multi-Runtime Agent Dispatch
+
+`agent/launch.go` currently hardcodes Claude Code. Gas Town v0.7.0 supports multiple runtimes: Gemini CLI, Copilot CLI, OpenCode. Adapting mg requires runtime detection from `AgentRuntime` metadata, per-sling runtime selection in the formula picker, and adapted prompt formatting per runtime.
+
+### Gas Town Status Latency
+
+`gt status --json` takes ~9 seconds to complete. Current mitigation: background polling with nil-safe rendering and on-demand fetch from the Gas Town panel. Future options: incremental status API from gt, local caching with TTL, or streaming status events via a Unix socket.
