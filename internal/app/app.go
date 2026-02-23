@@ -100,6 +100,10 @@ type Model struct {
 	mailReplying  bool
 	mailReplyID   string
 	mailReplyInput textinput.Model
+
+	// Problems view
+	showProblems bool
+	problems     views.Problems
 }
 
 // New creates a new app model from loaded issues.
@@ -532,6 +536,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.showGasTown {
 				m.gasTown.SetStatus(m.townStatus, m.gtEnv)
 			}
+			if m.showProblems {
+				m.problems.SetProblems(gastown.DetectProblems(m.townStatus))
+			}
 			// Check if selected issue now has an agent → fetch molecule
 			if cmd := m.maybeFetchMolecule(); cmd != nil {
 				return m, cmd
@@ -925,6 +932,16 @@ func (m Model) handleFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// When Problems panel is focused, route its keys before global handlers
+	if m.showProblems && m.activPane == PaneDetail {
+		switch msg.String() {
+		case "j", "k", "up", "down", "g", "G", "n", "h", "K":
+			var cmd tea.Cmd
+			m.problems, cmd = m.problems.Update(msg)
+			return m, cmd
+		}
+	}
+
 	// When Gas Town panel is focused, route its keys before global handlers
 	if m.showGasTown && m.activPane == PaneDetail {
 		switch msg.String() {
@@ -994,6 +1011,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, pollAgentState(m.gtEnv, m.inTmux))
 			}
 			return m, tea.Batch(cmds...)
+		}
+		return m, nil
+
+	case "p":
+		if !m.gtEnv.Available {
+			return m, nil
+		}
+		m.showProblems = !m.showProblems
+		if m.showProblems {
+			m.showGasTown = false
+			m.problems.SetProblems(gastown.DetectProblems(m.townStatus))
 		}
 		return m, nil
 
@@ -1727,11 +1755,13 @@ func (m *Model) layout() {
 		AgentCount:       len(m.activeAgents),
 		TownStatus:       m.townStatus,
 		GasTownAvailable: m.gtEnv.Available,
+		ProblemCount:     len(gastown.DetectProblems(m.townStatus)),
 	}
 
 	m.parade.SetSize(paradeW, bodyH)
 	m.detail.SetSize(detailW, bodyH)
 	m.gasTown.SetSize(detailW, bodyH)
+	m.problems.SetSize(detailW, bodyH)
 	m.detail.AllIssues = m.issues
 	m.detail.IssueMap = data.BuildIssueMap(m.issues)
 	m.detail.BlockingTypes = m.blockingTypes
@@ -1780,6 +1810,7 @@ func (m *Model) rebuildParade() {
 		AgentCount:       len(m.activeAgents),
 		TownStatus:       m.townStatus,
 		GasTownAvailable: m.gtEnv.Available,
+		ProblemCount:     len(gastown.DetectProblems(m.townStatus)),
 	}
 
 	m.parade = views.NewParade(filteredIssues, paradeW, bodyH, m.blockingTypes)
@@ -1906,7 +1937,9 @@ func (m Model) View() string {
 	header := m.header.View()
 
 	rightPanel := m.detail.View()
-	if m.showGasTown && m.gtEnv.Available {
+	if m.showProblems && m.gtEnv.Available {
+		rightPanel = m.problems.View()
+	} else if m.showGasTown && m.gtEnv.Available {
 		rightPanel = m.gasTown.View()
 	}
 

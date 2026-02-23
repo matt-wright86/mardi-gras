@@ -17,6 +17,7 @@ type Header struct {
 	AgentCount       int
 	TownStatus       *gastown.TownStatus
 	GasTownAvailable bool
+	ProblemCount     int
 }
 
 // View renders the header.
@@ -75,6 +76,12 @@ func (h Header) View() string {
 		gasTownInfo = gtStyle.Render(" " + strings.Join(parts, " "))
 	}
 
+	problemInfo := ""
+	if h.ProblemCount > 0 {
+		warnStyle := lipgloss.NewStyle().Foreground(ui.StatusStalled).Bold(true)
+		problemInfo = warnStyle.Render(fmt.Sprintf(" %s%d", ui.SymWarning, h.ProblemCount))
+	}
+
 	bar := h.renderProgressBar(total, len(h.Groups[data.ParadePastTheStand]), 20)
 
 	titleLine := lipgloss.JoinHorizontal(
@@ -83,6 +90,7 @@ func (h Header) View() string {
 		counts,
 		agentInfo,
 		gasTownInfo,
+		problemInfo,
 		"  ",
 		bar,
 	)

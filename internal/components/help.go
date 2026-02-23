@@ -47,6 +47,7 @@ func (h Help) View() string {
 				{key: "tab", desc: "Switch active pane"},
 				{key: "?", desc: "Toggle help"},
 				{key: ": / Ctrl+K", desc: "Open command palette"},
+				{key: "p", desc: "Toggle problems view (gt)"},
 			},
 		},
 		{
