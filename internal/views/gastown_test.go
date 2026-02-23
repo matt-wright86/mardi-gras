@@ -1145,6 +1145,51 @@ func TestGasTownSetScorecards(t *testing.T) {
 	}
 }
 
+func TestGasTownPredictionInConvoyView(t *testing.T) {
+	g := NewGasTown(100, 30)
+	status := &gastown.TownStatus{Agents: []gastown.AgentRuntime{}}
+	g.SetStatus(status, gastown.Env{Available: true})
+
+	convoys := []gastown.ConvoyDetail{
+		{ID: "cv-1", Title: "Auth sprint", Status: "open", Completed: 3, Total: 10},
+	}
+	g.SetConvoyDetails(convoys)
+
+	preds := []gastown.ConvoyPrediction{
+		{ConvoyID: "cv-1", ETALabel: "2.5d", Confidence: "high", Remaining: 7},
+	}
+	g.SetPredictions(preds)
+
+	view := g.View()
+	if !strings.Contains(view, "ETA") {
+		t.Fatal("view should contain ETA for predicted convoy")
+	}
+	if !strings.Contains(view, "2.5d") {
+		t.Fatal("view should contain predicted ETA value")
+	}
+}
+
+func TestGasTownNoPredictionForUnknownETA(t *testing.T) {
+	g := NewGasTown(100, 30)
+	status := &gastown.TownStatus{Agents: []gastown.AgentRuntime{}}
+	g.SetStatus(status, gastown.Env{Available: true})
+
+	convoys := []gastown.ConvoyDetail{
+		{ID: "cv-1", Title: "Stalled", Status: "open", Completed: 0, Total: 5},
+	}
+	g.SetConvoyDetails(convoys)
+
+	preds := []gastown.ConvoyPrediction{
+		{ConvoyID: "cv-1", ETALabel: "unknown", Confidence: "low", Remaining: 5},
+	}
+	g.SetPredictions(preds)
+
+	view := g.View()
+	if strings.Contains(view, "ETA") {
+		t.Fatal("view should not show ETA for 'unknown' predictions")
+	}
+}
+
 func TestGasTownNoScorecardsSection(t *testing.T) {
 	g := NewGasTown(100, 30)
 	status := &gastown.TownStatus{Agents: []gastown.AgentRuntime{}}

@@ -59,6 +59,9 @@ type GasTown struct {
 
 	// Agent scorecards (HOP quality aggregates)
 	scorecards []gastown.AgentScorecard
+
+	// Convoy predictions
+	predictions []gastown.ConvoyPrediction
 }
 
 // NewGasTown creates a Gas Town panel.
@@ -141,6 +144,11 @@ func (g *GasTown) GetCosts() *gastown.CostsOutput {
 	return g.costs
 }
 
+// GetConvoys returns the current convoy details for predictions.
+func (g *GasTown) GetConvoys() []gastown.ConvoyDetail {
+	return g.convoyDetails
+}
+
 // SetEvents updates the activity event feed.
 func (g *GasTown) SetEvents(events []gastown.Event) {
 	g.events = events
@@ -154,6 +162,11 @@ func (g *GasTown) SetVelocity(v *gastown.VelocityMetrics) {
 // SetScorecards updates the agent quality scorecards.
 func (g *GasTown) SetScorecards(cards []gastown.AgentScorecard) {
 	g.scorecards = cards
+}
+
+// SetPredictions updates the convoy completion predictions.
+func (g *GasTown) SetPredictions(preds []gastown.ConvoyPrediction) {
+	g.predictions = preds
 }
 
 // SelectedMail returns the currently selected mail message, or nil if none.
@@ -704,10 +717,20 @@ func (g *GasTown) renderConvoyDetails(width int) string {
 		}
 		lines = append(lines, titleLine)
 
-		// Progress bar
+		// Progress bar + ETA prediction
 		barWidth := max(width-16, 10)
 		bar := progressBar(c.Completed, c.Total, barWidth)
-		lines = append(lines, fmt.Sprintf("    %s", bar))
+		barLine := fmt.Sprintf("    %s", bar)
+
+		// Append ETA if prediction exists for this convoy
+		for _, pred := range g.predictions {
+			if pred.ConvoyID == c.ID && pred.ETALabel != "" && pred.ETALabel != "unknown" {
+				etaStyle := lipgloss.NewStyle().Foreground(ui.Dim)
+				barLine += etaStyle.Render(fmt.Sprintf("  ETA ~%s", pred.ETALabel))
+				break
+			}
+		}
+		lines = append(lines, barLine)
 
 		// Expanded: show tracked issues
 		if isExpanded && len(c.Tracked) > 0 {

@@ -2000,6 +2000,9 @@ func (m *Model) recomputeVelocity() {
 
 	cards := gastown.ComputeScorecards(m.issues)
 	m.gasTown.SetScorecards(cards)
+
+	preds := gastown.PredictConvoys(m.gasTown.GetConvoys(), v)
+	m.gasTown.SetPredictions(preds)
 }
 
 // propagateAgentState pushes active agent info to all sub-views.
