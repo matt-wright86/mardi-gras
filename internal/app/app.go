@@ -90,6 +90,16 @@ type Model struct {
 	nudging     bool
 	nudgeInput  textinput.Model
 	nudgeTarget string
+
+	// Convoy creation state
+	convoyCreating bool
+	convoyInput    textinput.Model
+	convoyIssueIDs []string
+
+	// Mail reply state
+	mailReplying  bool
+	mailReplyID   string
+	mailReplyInput textinput.Model
 }
 
 // New creates a new app model from loaded issues.
@@ -197,6 +207,68 @@ type nudgeResultMsg struct {
 	err     error
 }
 
+type handoffResultMsg struct {
+	target string
+	err    error
+}
+
+type decommissionResultMsg struct {
+	address string
+	err     error
+}
+
+type convoyListMsg struct {
+	convoys []gastown.ConvoyDetail
+	err     error
+}
+
+type convoyLandResultMsg struct {
+	convoyID string
+	err      error
+}
+
+type convoyCloseResultMsg struct {
+	convoyID string
+	err      error
+}
+
+type convoyCreateResultMsg struct {
+	name string
+	err  error
+}
+
+type mailInboxMsg struct {
+	messages []gastown.MailMessage
+	err      error
+}
+
+type mailReplyResultMsg struct {
+	messageID string
+	err       error
+}
+
+type mailArchiveResultMsg struct {
+	messageID string
+	err       error
+}
+
+type mailMarkReadResultMsg struct {
+	messageID string
+	err       error
+}
+
+type moleculeDAGMsg struct {
+	issueID  string
+	dag      *gastown.DAGInfo
+	progress *gastown.MoleculeProgress
+	err      error
+}
+
+type moleculeStepDoneMsg struct {
+	result *gastown.StepDoneResult
+	err    error
+}
+
 // mutateResultMsg is sent when a bd CLI mutation completes.
 type mutateResultMsg struct {
 	issueID string
@@ -301,6 +373,64 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	// Forward all messages to mail reply input when active
+	if m.mailReplying {
+		if km, ok := msg.(tea.KeyMsg); ok {
+			switch km.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "esc":
+				m.mailReplying = false
+				m.mailReplyID = ""
+				return m, nil
+			case "enter":
+				m.mailReplying = false
+				msgID := m.mailReplyID
+				body := m.mailReplyInput.Value()
+				m.mailReplyID = ""
+				if body == "" {
+					return m, nil
+				}
+				return m, func() tea.Msg {
+					err := gastown.MailReply(msgID, body)
+					return mailReplyResultMsg{messageID: msgID, err: err}
+				}
+			}
+		}
+		var cmd tea.Cmd
+		m.mailReplyInput, cmd = m.mailReplyInput.Update(msg)
+		return m, cmd
+	}
+
+	// Forward all messages to convoy name input when active
+	if m.convoyCreating {
+		if km, ok := msg.(tea.KeyMsg); ok {
+			switch km.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "esc":
+				m.convoyCreating = false
+				m.convoyIssueIDs = nil
+				return m, nil
+			case "enter":
+				m.convoyCreating = false
+				name := m.convoyInput.Value()
+				ids := m.convoyIssueIDs
+				m.convoyIssueIDs = nil
+				if name == "" {
+					return m, nil
+				}
+				return m, func() tea.Msg {
+					_, err := gastown.ConvoyCreate(name, ids)
+					return convoyCreateResultMsg{name: name, err: err}
+				}
+			}
+		}
+		var cmd tea.Cmd
+		m.convoyInput, cmd = m.convoyInput.Update(msg)
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
@@ -395,6 +525,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.propagateAgentState()
 			if m.showGasTown {
 				m.gasTown.SetStatus(m.townStatus, m.gtEnv)
+			}
+			// Check if selected issue now has an agent → fetch molecule
+			if cmd := m.maybeFetchMolecule(); cmd != nil {
+				return m, cmd
 			}
 		}
 		return m, nil
@@ -509,6 +643,174 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.toast = toast
 		return m, cmd
 
+	case handoffResultMsg:
+		if msg.err != nil {
+			toast, cmd := components.ShowToast(
+				fmt.Sprintf("Handoff failed for %s: %s", msg.target, msg.err),
+				components.ToastError, toastDuration,
+			)
+			m.toast = toast
+			return m, cmd
+		}
+		toast, cmd := components.ShowToast(
+			fmt.Sprintf("Handoff initiated for %s", msg.target),
+			components.ToastSuccess, toastDuration,
+		)
+		m.toast = toast
+		return m, tea.Batch(cmd, pollAgentState(m.gtEnv, m.inTmux))
+
+	case decommissionResultMsg:
+		if msg.err != nil {
+			toast, cmd := components.ShowToast(
+				fmt.Sprintf("Decommission failed for %s: %s", msg.address, msg.err),
+				components.ToastError, toastDuration,
+			)
+			m.toast = toast
+			return m, cmd
+		}
+		toast, cmd := components.ShowToast(
+			fmt.Sprintf("Decommissioned %s", msg.address),
+			components.ToastSuccess, toastDuration,
+		)
+		m.toast = toast
+		return m, tea.Batch(cmd, pollAgentState(m.gtEnv, m.inTmux))
+
+	case convoyListMsg:
+		if msg.err == nil {
+			m.gasTown.SetConvoyDetails(msg.convoys)
+		}
+		return m, nil
+
+	case convoyCreateResultMsg:
+		if msg.err != nil {
+			toast, cmd := components.ShowToast(
+				fmt.Sprintf("Convoy create failed: %s", msg.err),
+				components.ToastError, toastDuration,
+			)
+			m.toast = toast
+			return m, cmd
+		}
+		toast, cmd := components.ShowToast(
+			fmt.Sprintf("Convoy %q created", msg.name),
+			components.ToastSuccess, toastDuration,
+		)
+		m.toast = toast
+		return m, tea.Batch(cmd, fetchConvoyList)
+
+	case convoyLandResultMsg:
+		if msg.err != nil {
+			toast, cmd := components.ShowToast(
+				fmt.Sprintf("Convoy land failed: %s", msg.err),
+				components.ToastError, toastDuration,
+			)
+			m.toast = toast
+			return m, cmd
+		}
+		toast, cmd := components.ShowToast(
+			fmt.Sprintf("Convoy %s landed", msg.convoyID),
+			components.ToastSuccess, toastDuration,
+		)
+		m.toast = toast
+		return m, tea.Batch(cmd, fetchConvoyList, pollAgentState(m.gtEnv, m.inTmux))
+
+	case convoyCloseResultMsg:
+		if msg.err != nil {
+			toast, cmd := components.ShowToast(
+				fmt.Sprintf("Convoy close failed: %s", msg.err),
+				components.ToastError, toastDuration,
+			)
+			m.toast = toast
+			return m, cmd
+		}
+		toast, cmd := components.ShowToast(
+			fmt.Sprintf("Convoy %s closed", msg.convoyID),
+			components.ToastSuccess, toastDuration,
+		)
+		m.toast = toast
+		return m, tea.Batch(cmd, fetchConvoyList)
+
+	case mailInboxMsg:
+		if msg.err == nil {
+			m.gasTown.SetMailMessages(msg.messages)
+		}
+		return m, nil
+
+	case mailReplyResultMsg:
+		if msg.err != nil {
+			toast, cmd := components.ShowToast(
+				fmt.Sprintf("Reply failed: %s", msg.err),
+				components.ToastError, toastDuration,
+			)
+			m.toast = toast
+			return m, cmd
+		}
+		toast, cmd := components.ShowToast(
+			"Reply sent",
+			components.ToastSuccess, toastDuration,
+		)
+		m.toast = toast
+		return m, tea.Batch(cmd, fetchMailInbox)
+
+	case mailArchiveResultMsg:
+		if msg.err != nil {
+			toast, cmd := components.ShowToast(
+				fmt.Sprintf("Archive failed: %s", msg.err),
+				components.ToastError, toastDuration,
+			)
+			m.toast = toast
+			return m, cmd
+		}
+		toast, cmd := components.ShowToast(
+			fmt.Sprintf("Archived %s", msg.messageID),
+			components.ToastSuccess, toastDuration,
+		)
+		m.toast = toast
+		return m, tea.Batch(cmd, fetchMailInbox)
+
+	case mailMarkReadResultMsg:
+		if msg.err == nil {
+			// Refresh mail to update read status
+			return m, fetchMailInbox
+		}
+		return m, nil
+
+	case moleculeDAGMsg:
+		if msg.err == nil && msg.dag != nil {
+			// Only apply if still viewing the same issue
+			if m.detail.Issue != nil && m.detail.Issue.ID == msg.issueID {
+				m.detail.SetMolecule(msg.issueID, msg.dag, msg.progress)
+			}
+		}
+		return m, nil
+
+	case moleculeStepDoneMsg:
+		if msg.err != nil {
+			toast, cmd := components.ShowToast(
+				fmt.Sprintf("Step done failed: %s", msg.err),
+				components.ToastError, toastDuration,
+			)
+			m.toast = toast
+			return m, cmd
+		}
+		label := fmt.Sprintf("Step %s done", msg.result.StepID)
+		if msg.result.Complete {
+			label = "Molecule complete!"
+		} else if msg.result.NextStepTitle != "" {
+			label = fmt.Sprintf("Step done, next: %s", msg.result.NextStepTitle)
+		}
+		toast, cmd := components.ShowToast(label, components.ToastSuccess, toastDuration)
+		m.toast = toast
+		// Re-fetch molecule data to reflect the change
+		cmds := []tea.Cmd{cmd}
+		if m.detail.Issue != nil && m.detail.MoleculeIssueID != "" {
+			issueID := m.detail.Issue.ID
+			cmds = append(cmds, fetchMoleculeDAG(issueID))
+		}
+		return m, tea.Batch(cmds...)
+
+	case views.GasTownActionMsg:
+		return m.handleGasTownAction(msg)
+
 	case mutateResultMsg:
 		if msg.err != nil {
 			toast, cmd := components.ShowToast(
@@ -609,6 +911,16 @@ func (m Model) handleFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// When Gas Town panel is focused, route its keys before global handlers
+	if m.showGasTown && m.activPane == PaneDetail {
+		switch msg.String() {
+		case "j", "k", "up", "down", "g", "G", "n", "h", "K", "tab", "enter", "l", "x", "r", "d":
+			var cmd tea.Cmd
+			m.gasTown, cmd = m.gasTown.Update(msg)
+			return m, cmd
+		}
+	}
+
 	switch msg.String() {
 	case "q":
 		return m, tea.Quit
@@ -663,10 +975,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.showGasTown = !m.showGasTown
 		if m.showGasTown {
 			m.gasTown.SetStatus(m.townStatus, m.gtEnv)
-			// If status hasn't arrived yet (slow gt), trigger a fetch
+			cmds := []tea.Cmd{fetchConvoyList, fetchMailInbox}
 			if m.townStatus == nil {
-				return m, pollAgentState(m.gtEnv, m.inTmux)
+				cmds = append(cmds, pollAgentState(m.gtEnv, m.inTmux))
 			}
+			return m, tea.Batch(cmds...)
 		}
 		return m, nil
 
@@ -826,6 +1139,34 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.createForm = components.NewCreateForm(m.width, m.height)
 		return m, m.createForm.Init()
 
+	case "C":
+		if !m.gtEnv.Available {
+			return m, nil
+		}
+		var ids []string
+		if selected := m.parade.SelectedIssues(); len(selected) > 0 {
+			ids = make([]string, len(selected))
+			for i, iss := range selected {
+				ids[i] = iss.ID
+			}
+			m.parade.ClearSelection()
+		} else if m.parade.SelectedIssue != nil {
+			ids = []string{m.parade.SelectedIssue.ID}
+		}
+		if len(ids) == 0 {
+			return m, nil
+		}
+		m.convoyCreating = true
+		m.convoyIssueIDs = ids
+		m.convoyInput = textinput.New()
+		m.convoyInput.Prompt = ui.InputPrompt.Render("convoy> ")
+		m.convoyInput.Placeholder = fmt.Sprintf("Name for convoy (%d issues)...", len(ids))
+		m.convoyInput.TextStyle = ui.InputText
+		m.convoyInput.Cursor.Style = ui.InputCursor
+		m.convoyInput.Width = 50
+		m.convoyInput.Focus()
+		return m, textinput.Blink
+
 	case ":", "ctrl+k":
 		m.showPalette = true
 		m.palette = components.NewPalette(m.width, m.height, m.buildPaletteCommands())
@@ -874,6 +1215,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m.activPane = PaneDetail
 			m.detail.Focused = true
+			if cmd := m.maybeFetchMolecule(); cmd != nil {
+				return m, cmd
+			}
 		}
 		return m, nil
 	}
@@ -891,6 +1235,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.detail.Viewport.ScrollDown(1)
 		case "k", "up":
 			m.detail.Viewport.ScrollUp(1)
+		case "m":
+			// Mark current molecule step as done
+			if m.detail.MoleculeDAG != nil {
+				stepID := m.detail.MoleculeDAG.ActiveStepID()
+				if stepID != "" {
+					return m, func() tea.Msg {
+						result, err := gastown.MoleculeStepDone(stepID)
+						return moleculeStepDoneMsg{result: result, err: err}
+					}
+				}
+			}
 		default:
 			m.detail.Viewport, cmd = m.detail.Viewport.Update(msg)
 		}
@@ -1090,6 +1445,7 @@ func (m Model) buildPaletteCommands() []components.PaletteCommand {
 			components.PaletteCommand{Name: "Toggle Gas Town", Desc: "Show/hide Gas Town panel", Key: "^g", Action: components.ActionToggleGasTown},
 			components.PaletteCommand{Name: "Sling with formula", Desc: "Pick formula and sling to polecat", Key: "s", Action: components.ActionSlingFormula},
 			components.PaletteCommand{Name: "Nudge agent", Desc: "Nudge agent with message", Key: "n", Action: components.ActionNudgeAgent},
+			components.PaletteCommand{Name: "Create convoy", Desc: "Create convoy from selected issues", Key: "C", Action: components.ActionCreateConvoy},
 		)
 	}
 
@@ -1156,11 +1512,106 @@ func (m Model) executePaletteAction(action components.PaletteAction) (tea.Model,
 			m.gasTown.SetStatus(m.townStatus, m.gtEnv)
 		}
 		return m, nil
+	case components.ActionCreateConvoy:
+		return m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}})
 	case components.ActionHelp:
 		m.showHelp = true
 		return m, nil
 	case components.ActionQuit:
 		return m, tea.Quit
+	}
+	return m, nil
+}
+
+// handleGasTownAction processes actions emitted by the Gas Town panel.
+func (m Model) handleGasTownAction(msg views.GasTownActionMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case "nudge":
+		// Reuse the existing nudge input flow
+		m.nudging = true
+		target := msg.Agent.Address
+		if target == "" {
+			target = msg.Agent.Name
+		}
+		m.nudgeTarget = target
+		m.nudgeInput = textinput.New()
+		m.nudgeInput.Prompt = ui.InputPrompt.Render("nudge> ")
+		m.nudgeInput.Placeholder = "Message for " + msg.Agent.Name + "..."
+		m.nudgeInput.TextStyle = ui.InputText
+		m.nudgeInput.Cursor.Style = ui.InputCursor
+		m.nudgeInput.Width = 50
+		m.nudgeInput.Focus()
+		return m, textinput.Blink
+
+	case "handoff":
+		if !m.inTmux {
+			toast, cmd := components.ShowToast(
+				"Handoff requires tmux",
+				components.ToastError, toastDuration,
+			)
+			m.toast = toast
+			return m, cmd
+		}
+		target := msg.Agent.Address
+		if target == "" {
+			target = msg.Agent.Name
+		}
+		agentName := msg.Agent.Name
+		projDir := m.projectDir
+		return m, func() tea.Msg {
+			_, err := gastown.HandoffInTmux(target, projDir)
+			return handoffResultMsg{target: agentName, err: err}
+		}
+
+	case "decommission":
+		address := msg.Agent.Address
+		if address == "" {
+			address = msg.Agent.Name
+		}
+		return m, func() tea.Msg {
+			err := gastown.Decommission(address)
+			return decommissionResultMsg{address: msg.Agent.Name, err: err}
+		}
+
+	case "convoy_land":
+		convoyID := msg.ConvoyID
+		return m, func() tea.Msg {
+			err := gastown.ConvoyLand(convoyID)
+			return convoyLandResultMsg{convoyID: convoyID, err: err}
+		}
+
+	case "convoy_close":
+		convoyID := msg.ConvoyID
+		return m, func() tea.Msg {
+			err := gastown.ConvoyClose(convoyID)
+			return convoyCloseResultMsg{convoyID: convoyID, err: err}
+		}
+
+	case "mail_reply":
+		m.mailReplying = true
+		m.mailReplyID = msg.Mail.ID
+		m.mailReplyInput = textinput.New()
+		m.mailReplyInput.Prompt = ui.InputPrompt.Render("reply> ")
+		m.mailReplyInput.Placeholder = "Reply to " + msg.Mail.From + "..."
+		m.mailReplyInput.TextStyle = ui.InputText
+		m.mailReplyInput.Cursor.Style = ui.InputCursor
+		m.mailReplyInput.Width = 50
+		m.mailReplyInput.Focus()
+		return m, textinput.Blink
+
+	case "mail_archive":
+		msgID := msg.Mail.ID
+		return m, func() tea.Msg {
+			err := gastown.MailArchive(msgID)
+			return mailArchiveResultMsg{messageID: msgID, err: err}
+		}
+
+	case "mail_read":
+		msgID := msg.Mail.ID
+		return m, func() tea.Msg {
+			err := gastown.MailMarkRead(msgID)
+			return mailMarkReadResultMsg{messageID: msgID, err: err}
+		}
 	}
 	return m, nil
 }
@@ -1201,6 +1652,24 @@ func (m *Model) syncSelection() {
 	if m.parade.SelectedIssue != nil {
 		m.detail.SetIssue(m.parade.SelectedIssue)
 	}
+}
+
+// maybeFetchMolecule returns a Cmd to fetch molecule data if the selected issue
+// has an active agent with a hooked bead (molecule attachment).
+func (m *Model) maybeFetchMolecule() tea.Cmd {
+	issue := m.parade.SelectedIssue
+	if issue == nil || !m.gtEnv.Available {
+		return nil
+	}
+	// Only fetch if the issue has an active agent
+	if _, active := m.activeAgents[issue.ID]; !active {
+		return nil
+	}
+	// Don't re-fetch if we already have data for this issue
+	if m.detail.MoleculeIssueID == issue.ID && m.detail.MoleculeDAG != nil {
+		return nil
+	}
+	return fetchMoleculeDAG(issue.ID)
 }
 
 // layout recalculates dimensions for all sub-components.
@@ -1362,6 +1831,30 @@ func pollAgentState(gtEnv gastown.Env, inTmux bool) tea.Cmd {
 	}
 }
 
+// fetchConvoyList returns a Cmd that fetches convoy details via gt convoy list.
+func fetchConvoyList() tea.Msg {
+	convoys, err := gastown.ConvoyList()
+	return convoyListMsg{convoys: convoys, err: err}
+}
+
+// fetchMailInbox returns a Cmd that fetches mail messages via gt mail inbox.
+func fetchMailInbox() tea.Msg {
+	msgs, err := gastown.MailInbox(false)
+	return mailInboxMsg{messages: msgs, err: err}
+}
+
+// fetchMoleculeDAG returns a Cmd that fetches molecule DAG and progress for an issue.
+func fetchMoleculeDAG(issueID string) tea.Cmd {
+	return func() tea.Msg {
+		dag, dagErr := gastown.MoleculeDAG(issueID)
+		if dagErr != nil {
+			return moleculeDAGMsg{issueID: issueID, err: dagErr}
+		}
+		progress, _ := gastown.MoleculeProgressFetch(issueID)
+		return moleculeDAGMsg{issueID: issueID, dag: dag, progress: progress}
+	}
+}
+
 // View implements tea.Model.
 func (m Model) View() string {
 	if !m.ready {
@@ -1392,6 +1885,16 @@ func (m Model) View() string {
 			Padding(0, 1).
 			Width(m.width).
 			Render(m.nudgeInput.View())
+	} else if m.mailReplying {
+		bottomBar = lipgloss.NewStyle().
+			Padding(0, 1).
+			Width(m.width).
+			Render(m.mailReplyInput.View())
+	} else if m.convoyCreating {
+		bottomBar = lipgloss.NewStyle().
+			Padding(0, 1).
+			Width(m.width).
+			Render(m.convoyInput.View())
 	} else if m.filtering || m.filterInput.Value() != "" {
 		bottomBar = lipgloss.NewStyle().
 			Padding(0, 1).

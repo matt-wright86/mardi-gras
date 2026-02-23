@@ -96,6 +96,7 @@ func (h Help) View() string {
 				{key: "/", desc: "Enter filter mode"},
 				{key: "a", desc: "Launch agent (tmux: new window)"},
 				{key: "A", desc: "Kill active agent on issue"},
+				{key: "m", desc: "Mark active molecule step done"},
 			},
 		},
 		{
@@ -115,6 +116,23 @@ func (h Help) View() string {
 				{key: "s", desc: "Pick formula and sling to polecat"},
 				{key: "n", desc: "Nudge agent with message"},
 				{key: "A", desc: "Unsling/kill agent"},
+			},
+		},
+		{
+			title: "GAS TOWN PANEL (ctrl+g)",
+			bindings: []helpBinding{
+				{key: "j / k", desc: "Navigate agents/convoys"},
+				{key: "g / G", desc: "Jump to first/last"},
+				{key: "tab", desc: "Switch section (agents/convoys)"},
+				{key: "n", desc: "Nudge selected agent"},
+				{key: "h", desc: "Handoff work from agent"},
+				{key: "K", desc: "Decommission polecat"},
+				{key: "enter", desc: "Expand/collapse convoy or message"},
+				{key: "l", desc: "Land convoy"},
+				{key: "x", desc: "Close convoy"},
+				{key: "r", desc: "Reply to selected message"},
+				{key: "d", desc: "Archive selected message"},
+				{key: "C", desc: "Create convoy from selection"},
 			},
 		},
 	}

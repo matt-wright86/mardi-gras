@@ -4,68 +4,387 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/matt-wright86/mardi-gras/internal/gastown"
 	"github.com/matt-wright86/mardi-gras/internal/ui"
 )
 
+// GasTownSection tracks which section of the panel has focus.
+type GasTownSection int
+
+const (
+	SectionAgents GasTownSection = iota
+	SectionConvoys
+	SectionMail
+)
+
+// GasTownActionMsg carries user intent from the Gas Town panel back to app.go.
+type GasTownActionMsg struct {
+	Type     string // "nudge", "handoff", "decommission", "convoy_land", "convoy_close", "mail_reply", "mail_archive", "mail_read"
+	Agent    gastown.AgentRuntime
+	ConvoyID string
+	Mail     gastown.MailMessage
+}
+
 // GasTown renders the Gas Town control surface panel in place of the detail pane.
 type GasTown struct {
-	width    int
-	height   int
-	viewport viewport.Model
-	status   *gastown.TownStatus
-	env      gastown.Env
+	width       int
+	height      int
+	scrollOff   int // vertical scroll offset (manual, not viewport)
+	status      *gastown.TownStatus
+	env         gastown.Env
+	agentCursor int            // cursor index within the agent list
+	section     GasTownSection // which section has focus
+
+	// Convoy state
+	convoyCursor   int                    // cursor within convoy list
+	convoyDetails  []gastown.ConvoyDetail // rich convoy data from gt convoy list
+	expandedConvoy int                    // index of expanded convoy, -1 = none
+
+	// Mail state
+	mailCursor   int                    // cursor within mail list
+	mailMessages []gastown.MailMessage  // messages from gt mail inbox
+	expandedMail int                    // index of expanded message, -1 = none
 }
 
 // NewGasTown creates a Gas Town panel.
 func NewGasTown(width, height int) GasTown {
-	vp := viewport.New(width-2, height)
-	g := GasTown{
-		width:    width,
-		height:   height,
-		viewport: vp,
+	return GasTown{
+		width:          width,
+		height:         height,
+		expandedConvoy: -1,
+		expandedMail:   -1,
 	}
-	g.viewport.SetContent(g.renderContent())
-	return g
 }
 
 // SetSize updates dimensions.
 func (g *GasTown) SetSize(width, height int) {
 	g.width = width
 	g.height = height
-	g.viewport.Width = width - 2
-	g.viewport.Height = height
-	g.viewport.SetContent(g.renderContent())
 }
 
 // SetStatus updates the panel with fresh Gas Town state.
 func (g *GasTown) SetStatus(status *gastown.TownStatus, env gastown.Env) {
 	g.status = status
 	g.env = env
-	g.viewport.SetContent(g.renderContent())
+	// Clamp cursor to valid range when agent list changes
+	if status != nil && g.agentCursor >= len(status.Agents) {
+		g.agentCursor = max(len(status.Agents)-1, 0)
+	}
 }
 
-// Update forwards viewport messages for scrolling.
+// SetConvoyDetails updates the convoy detail list from gt convoy list --json.
+func (g *GasTown) SetConvoyDetails(convoys []gastown.ConvoyDetail) {
+	g.convoyDetails = convoys
+	if g.convoyCursor >= len(convoys) {
+		g.convoyCursor = max(len(convoys)-1, 0)
+	}
+}
+
+// SelectedAgent returns the currently selected agent, or nil if none.
+func (g *GasTown) SelectedAgent() *gastown.AgentRuntime {
+	if g.section != SectionAgents {
+		return nil
+	}
+	if g.status == nil || len(g.status.Agents) == 0 {
+		return nil
+	}
+	if g.agentCursor >= 0 && g.agentCursor < len(g.status.Agents) {
+		return &g.status.Agents[g.agentCursor]
+	}
+	return nil
+}
+
+// SelectedConvoy returns the currently selected convoy, or nil if none.
+func (g *GasTown) SelectedConvoy() *gastown.ConvoyDetail {
+	if g.section != SectionConvoys {
+		return nil
+	}
+	if len(g.convoyDetails) == 0 {
+		return nil
+	}
+	if g.convoyCursor >= 0 && g.convoyCursor < len(g.convoyDetails) {
+		return &g.convoyDetails[g.convoyCursor]
+	}
+	return nil
+}
+
+// SetMailMessages updates the mail list from gt mail inbox --json.
+func (g *GasTown) SetMailMessages(msgs []gastown.MailMessage) {
+	g.mailMessages = msgs
+	if g.mailCursor >= len(msgs) {
+		g.mailCursor = max(len(msgs)-1, 0)
+	}
+}
+
+// SelectedMail returns the currently selected mail message, or nil if none.
+func (g *GasTown) SelectedMail() *gastown.MailMessage {
+	if g.section != SectionMail {
+		return nil
+	}
+	if len(g.mailMessages) == 0 {
+		return nil
+	}
+	if g.mailCursor >= 0 && g.mailCursor < len(g.mailMessages) {
+		return &g.mailMessages[g.mailCursor]
+	}
+	return nil
+}
+
+// AgentCount returns the number of agents in the current status.
+func (g *GasTown) AgentCount() int {
+	if g.status == nil {
+		return 0
+	}
+	return len(g.status.Agents)
+}
+
+// Section returns the currently focused section.
+func (g *GasTown) Section() GasTownSection {
+	return g.section
+}
+
+// Update handles key messages for the Gas Town panel.
+// Returns a tea.Cmd when the panel wants to emit an action back to app.go.
 func (g GasTown) Update(msg tea.Msg) (GasTown, tea.Cmd) {
-	var cmd tea.Cmd
-	g.viewport, cmd = g.viewport.Update(msg)
-	return g, cmd
+	km, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return g, nil
+	}
+
+	switch km.String() {
+	case "tab":
+		// Cycle through sections: Agents → Convoys → Mail → Agents
+		switch g.section {
+		case SectionAgents:
+			if len(g.convoyDetails) > 0 {
+				g.section = SectionConvoys
+			} else if len(g.mailMessages) > 0 {
+				g.section = SectionMail
+			}
+		case SectionConvoys:
+			if len(g.mailMessages) > 0 {
+				g.section = SectionMail
+			} else {
+				g.section = SectionAgents
+			}
+		case SectionMail:
+			g.section = SectionAgents
+		}
+		return g, nil
+
+	case "j", "down":
+		g.moveCursorDown()
+		return g, nil
+
+	case "k", "up":
+		g.moveCursorUp()
+		return g, nil
+
+	case "g":
+		g.jumpTop()
+		return g, nil
+
+	case "G":
+		g.jumpBottom()
+		return g, nil
+
+	case "enter":
+		if g.section == SectionConvoys {
+			if g.expandedConvoy == g.convoyCursor {
+				g.expandedConvoy = -1
+			} else {
+				g.expandedConvoy = g.convoyCursor
+			}
+		} else if g.section == SectionMail {
+			if g.expandedMail == g.mailCursor {
+				g.expandedMail = -1
+			} else {
+				g.expandedMail = g.mailCursor
+				// Emit mark-read action when expanding
+				if m := g.SelectedMail(); m != nil && !m.Read {
+					mail := *m
+					return g, func() tea.Msg {
+						return GasTownActionMsg{Type: "mail_read", Mail: mail}
+					}
+				}
+			}
+		}
+		return g, nil
+
+	case "n":
+		if g.section == SectionAgents {
+			if a := g.SelectedAgent(); a != nil {
+				agent := *a
+				return g, func() tea.Msg {
+					return GasTownActionMsg{Type: "nudge", Agent: agent}
+				}
+			}
+		}
+
+	case "h":
+		if g.section == SectionAgents {
+			if a := g.SelectedAgent(); a != nil {
+				agent := *a
+				return g, func() tea.Msg {
+					return GasTownActionMsg{Type: "handoff", Agent: agent}
+				}
+			}
+		}
+
+	case "K":
+		if g.section == SectionAgents {
+			if a := g.SelectedAgent(); a != nil && a.Role == "polecat" {
+				agent := *a
+				return g, func() tea.Msg {
+					return GasTownActionMsg{Type: "decommission", Agent: agent}
+				}
+			}
+		}
+
+	case "l":
+		if g.section == SectionConvoys {
+			if c := g.SelectedConvoy(); c != nil {
+				convoyID := c.ID
+				return g, func() tea.Msg {
+					return GasTownActionMsg{Type: "convoy_land", ConvoyID: convoyID}
+				}
+			}
+		}
+
+	case "x":
+		if g.section == SectionConvoys {
+			if c := g.SelectedConvoy(); c != nil {
+				convoyID := c.ID
+				return g, func() tea.Msg {
+					return GasTownActionMsg{Type: "convoy_close", ConvoyID: convoyID}
+				}
+			}
+		}
+
+	case "r":
+		if g.section == SectionMail {
+			if m := g.SelectedMail(); m != nil {
+				mail := *m
+				return g, func() tea.Msg {
+					return GasTownActionMsg{Type: "mail_reply", Mail: mail}
+				}
+			}
+		}
+
+	case "d":
+		if g.section == SectionMail {
+			if m := g.SelectedMail(); m != nil {
+				mail := *m
+				return g, func() tea.Msg {
+					return GasTownActionMsg{Type: "mail_archive", Mail: mail}
+				}
+			}
+		}
+	}
+
+	return g, nil
+}
+
+func (g *GasTown) moveCursorDown() {
+	switch g.section {
+	case SectionAgents:
+		count := g.AgentCount()
+		if count > 0 && g.agentCursor < count-1 {
+			g.agentCursor++
+			g.ensureVisible()
+		}
+	case SectionConvoys:
+		count := len(g.convoyDetails)
+		if count > 0 && g.convoyCursor < count-1 {
+			g.convoyCursor++
+		}
+	case SectionMail:
+		count := len(g.mailMessages)
+		if count > 0 && g.mailCursor < count-1 {
+			g.mailCursor++
+		}
+	}
+}
+
+func (g *GasTown) moveCursorUp() {
+	switch g.section {
+	case SectionAgents:
+		if g.agentCursor > 0 {
+			g.agentCursor--
+			g.ensureVisible()
+		}
+	case SectionConvoys:
+		if g.convoyCursor > 0 {
+			g.convoyCursor--
+		}
+	case SectionMail:
+		if g.mailCursor > 0 {
+			g.mailCursor--
+		}
+	}
+}
+
+func (g *GasTown) jumpTop() {
+	switch g.section {
+	case SectionAgents:
+		g.agentCursor = 0
+		g.scrollOff = 0
+	case SectionConvoys:
+		g.convoyCursor = 0
+	case SectionMail:
+		g.mailCursor = 0
+	}
+}
+
+func (g *GasTown) jumpBottom() {
+	switch g.section {
+	case SectionAgents:
+		count := g.AgentCount()
+		if count > 0 {
+			g.agentCursor = count - 1
+			g.ensureVisible()
+		}
+	case SectionConvoys:
+		count := len(g.convoyDetails)
+		if count > 0 {
+			g.convoyCursor = count - 1
+		}
+	case SectionMail:
+		count := len(g.mailMessages)
+		if count > 0 {
+			g.mailCursor = count - 1
+		}
+	}
+}
+
+// ensureVisible adjusts scroll offset so the cursor row is on screen.
+func (g *GasTown) ensureVisible() {
+	visibleRows := max(g.height-12, 3)
+
+	if g.agentCursor < g.scrollOff {
+		g.scrollOff = g.agentCursor
+	}
+	if g.agentCursor >= g.scrollOff+visibleRows {
+		g.scrollOff = g.agentCursor - visibleRows + 1
+	}
 }
 
 // View renders the Gas Town panel with border.
 func (g GasTown) View() string {
-	content := g.viewport.View()
-	return ui.GasTownBorder.Height(g.height).Render(content)
+	content := g.renderContent()
+	// Manual scrolling: split into lines and take the visible window
+	lines := strings.Split(content, "\n")
+	if g.scrollOff > 0 && g.scrollOff < len(lines) {
+		lines = lines[g.scrollOff:]
+	}
+	visible := strings.Join(lines, "\n")
+	return ui.GasTownBorder.Height(g.height).Render(visible)
 }
 
 func (g *GasTown) renderContent() string {
-	contentWidth := g.width - 4
-	if contentWidth < 20 {
-		contentWidth = 20
-	}
+	contentWidth := max(g.width-4, 20)
 
 	if g.status == nil {
 		msg := ui.SymTown + " Gas Town not available"
@@ -80,17 +399,30 @@ func (g *GasTown) renderContent() string {
 
 	var sections []string
 
-	sections = append(sections, renderTownHeader(g.env, g.status, contentWidth))
-	sections = append(sections, renderAgentRoster(g.status.Agents, contentWidth))
+	sections = append(sections, renderTownHeader(g.env, g.status))
+	sections = append(sections, g.renderAgentRoster(contentWidth))
 
-	if len(g.status.Convoys) > 0 {
+	if len(g.status.Rigs) > 0 {
+		sections = append(sections, renderRigs(g.status.Rigs))
+	}
+
+	if len(g.convoyDetails) > 0 {
+		sections = append(sections, g.renderConvoyDetails(contentWidth))
+	} else if len(g.status.Convoys) > 0 {
 		sections = append(sections, renderConvoys(g.status.Convoys, contentWidth))
 	}
+
+	if len(g.mailMessages) > 0 {
+		sections = append(sections, g.renderMail(contentWidth))
+	}
+
+	// Hint bar at bottom
+	sections = append(sections, g.renderHints())
 
 	return strings.Join(sections, "\n")
 }
 
-func renderTownHeader(env gastown.Env, status *gastown.TownStatus, width int) string {
+func renderTownHeader(env gastown.Env, status *gastown.TownStatus) string {
 	var lines []string
 
 	title := lipgloss.NewStyle().
@@ -125,10 +457,17 @@ func renderTownHeader(env gastown.Env, status *gastown.TownStatus, width int) st
 	return strings.Join(lines, "\n")
 }
 
-func renderAgentRoster(agents []gastown.AgentRuntime, width int) string {
+// renderAgentRoster renders the agent list with a selectable cursor.
+func (g *GasTown) renderAgentRoster(width int) string {
+	agents := g.status.Agents
 	var lines []string
 
-	lines = append(lines, ui.GasTownTitle.Render("AGENTS"))
+	// Section title with focus indicator
+	titleStr := "AGENTS"
+	if g.section == SectionAgents {
+		titleStr = ui.Cursor + " AGENTS"
+	}
+	lines = append(lines, ui.GasTownTitle.Render(titleStr))
 
 	if len(agents) == 0 {
 		lines = append(lines, ui.GasTownLabel.Render("  No agents registered"))
@@ -148,7 +487,9 @@ func renderAgentRoster(agents []gastown.AgentRuntime, width int) string {
 	lines = append(lines, lipgloss.NewStyle().Foreground(ui.Dim).Render(
 		"  "+strings.Repeat("─", width-4)))
 
-	for _, a := range agents {
+	for i, a := range agents {
+		isSelected := g.section == SectionAgents && i == g.agentCursor
+
 		// State symbol + color
 		stateSym := ui.SymIdle
 		switch a.State {
@@ -166,6 +507,9 @@ func renderAgentRoster(agents []gastown.AgentRuntime, width int) string {
 
 		// Name
 		nameStyle := lipgloss.NewStyle().Foreground(ui.Light)
+		if isSelected {
+			nameStyle = nameStyle.Bold(true).Foreground(ui.White)
+		}
 		name := a.Name
 		if len(name) > nameW {
 			name = name[:nameW-1] + "…"
@@ -173,10 +517,7 @@ func renderAgentRoster(agents []gastown.AgentRuntime, width int) string {
 		nameStr := nameStyle.Render(fmt.Sprintf("%-*s", nameW, name))
 
 		// Work title (truncated)
-		workWidth := width - nameW - roleW - stateW - 6
-		if workWidth < 8 {
-			workWidth = 8
-		}
+		workWidth := max(width-nameW-roleW-stateW-6, 8)
 		work := a.WorkTitle
 		if work == "" && a.HookBead != "" {
 			work = a.HookBead
@@ -194,23 +535,253 @@ func renderAgentRoster(agents []gastown.AgentRuntime, width int) string {
 				fmt.Sprintf(" %s%d", ui.SymMail, a.Mail))
 		}
 
-		row := fmt.Sprintf("  %s %s %s %s%s",
-			nameStr, roleStr, stateStr, workStyle.Render(work), mailStr)
+		// Cursor indicator
+		prefix := "  "
+		if isSelected {
+			prefix = ui.ItemCursor.Render(ui.Cursor+" ") + ""
+		}
+
+		row := fmt.Sprintf("%s%s %s %s %s%s",
+			prefix, nameStr, roleStr, stateStr, workStyle.Render(work), mailStr)
+
+		if isSelected {
+			row = ui.GasTownAgentSelected.Width(width).Render(row)
+		}
+
 		lines = append(lines, row)
 	}
 
 	return strings.Join(lines, "\n")
 }
 
+func renderRigs(rigs []gastown.RigStatus) string {
+	var lines []string
+
+	lines = append(lines, ui.GasTownTitle.Render("RIGS"))
+
+	for _, r := range rigs {
+		var badges []string
+		badges = append(badges, fmt.Sprintf("%d polecats", r.PolecatCount))
+		if r.CrewCount > 0 {
+			badges = append(badges, fmt.Sprintf("%d crew", r.CrewCount))
+		}
+		if r.HasWitness {
+			badges = append(badges, "witness")
+		}
+		if r.HasRefinery {
+			badges = append(badges, "refinery")
+		}
+
+		nameStyle := lipgloss.NewStyle().Foreground(ui.Light).Bold(true)
+		infoStyle := lipgloss.NewStyle().Foreground(ui.Muted)
+
+		line := fmt.Sprintf("  %s  %s",
+			nameStyle.Render(r.Name),
+			infoStyle.Render(strings.Join(badges, " | ")))
+		lines = append(lines, line)
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// renderConvoyDetails renders the rich convoy section with cursor and expand/collapse.
+func (g *GasTown) renderConvoyDetails(width int) string {
+	var lines []string
+
+	titleStr := "CONVOYS"
+	if g.section == SectionConvoys {
+		titleStr = ui.Cursor + " CONVOYS"
+	}
+	lines = append(lines, ui.GasTownTitle.Render(titleStr))
+
+	for i, c := range g.convoyDetails {
+		isSelected := g.section == SectionConvoys && i == g.convoyCursor
+		isExpanded := i == g.expandedConvoy
+
+		// Status badge
+		statusColor := ui.Muted
+		if c.Status == "open" {
+			statusColor = ui.BrightGreen
+		}
+		statusStyle := lipgloss.NewStyle().Foreground(statusColor)
+
+		// Expand/collapse indicator
+		expandSym := "+"
+		if isExpanded {
+			expandSym = "-"
+		}
+
+		// Cursor
+		prefix := "  "
+		if isSelected {
+			prefix = ui.ItemCursor.Render(ui.Cursor+" ") + ""
+		}
+
+		titleLine := fmt.Sprintf("%s%s %s  %s  %d/%d",
+			prefix,
+			lipgloss.NewStyle().Foreground(ui.Dim).Render(expandSym),
+			ui.GasTownValue.Render(truncateGT(c.Title, width-20)),
+			statusStyle.Render("["+c.Status+"]"),
+			c.Completed, c.Total)
+
+		if isSelected {
+			titleLine = ui.GasTownAgentSelected.Width(width).Render(titleLine)
+		}
+		lines = append(lines, titleLine)
+
+		// Progress bar
+		barWidth := max(width-16, 10)
+		bar := progressBar(c.Completed, c.Total, barWidth)
+		lines = append(lines, fmt.Sprintf("    %s", bar))
+
+		// Expanded: show tracked issues
+		if isExpanded && len(c.Tracked) > 0 {
+			for _, t := range c.Tracked {
+				sym := ui.SymIdle
+				issueColor := ui.Muted
+				switch t.Status {
+				case "closed":
+					sym = ui.SymResolved
+					issueColor = ui.BrightGreen
+				case "in_progress", "hooked":
+					sym = ui.SymWorking
+					issueColor = ui.BrightGold
+				case "open":
+					sym = ui.SymLinedUp
+				}
+				style := lipgloss.NewStyle().Foreground(issueColor)
+
+				issueLine := fmt.Sprintf("      %s %s",
+					style.Render(sym),
+					style.Render(truncateGT(t.ID+" "+t.Title, width-10)))
+
+				if t.Worker != "" {
+					workerStyle := lipgloss.NewStyle().Foreground(ui.Dim)
+					issueLine += workerStyle.Render(fmt.Sprintf(" [%s]", t.Worker))
+				}
+
+				lines = append(lines, issueLine)
+			}
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// renderMail renders the mail section with cursor and expand/collapse.
+func (g *GasTown) renderMail(width int) string {
+	var lines []string
+
+	// Count unread
+	unread := 0
+	for _, m := range g.mailMessages {
+		if !m.Read {
+			unread++
+		}
+	}
+
+	titleStr := "MAIL"
+	if unread > 0 {
+		titleStr = fmt.Sprintf("MAIL (%d unread)", unread)
+	}
+	if g.section == SectionMail {
+		titleStr = ui.Cursor + " " + titleStr
+	}
+	lines = append(lines, ui.GasTownTitle.Render(titleStr))
+
+	for i, m := range g.mailMessages {
+		isSelected := g.section == SectionMail && i == g.mailCursor
+		isExpanded := i == g.expandedMail
+
+		// Unread indicator
+		unreadSym := " "
+		if !m.Read {
+			unreadSym = lipgloss.NewStyle().Foreground(ui.StatusMail).Render(ui.SymMail)
+		}
+
+		// Priority indicator
+		prioStyle := lipgloss.NewStyle().Foreground(ui.Muted)
+		switch m.Priority {
+		case "urgent":
+			prioStyle = lipgloss.NewStyle().Foreground(ui.PrioP0)
+		case "high":
+			prioStyle = lipgloss.NewStyle().Foreground(ui.PrioP1)
+		}
+
+		// From (truncated)
+		from := m.From
+		if len(from) > 18 {
+			from = from[:15] + "..."
+		}
+		fromStyle := lipgloss.NewStyle().Foreground(ui.Light)
+		if !m.Read {
+			fromStyle = fromStyle.Bold(true)
+		}
+
+		// Subject (truncated)
+		subjectWidth := max(width-24, 10)
+		subject := truncateGT(m.Subject, subjectWidth)
+		subjectStyle := lipgloss.NewStyle().Foreground(ui.Muted)
+		if !m.Read {
+			subjectStyle = lipgloss.NewStyle().Foreground(ui.White)
+		}
+
+		// Cursor
+		prefix := "  "
+		if isSelected {
+			prefix = ui.ItemCursor.Render(ui.Cursor+" ") + ""
+		}
+
+		// Type badge
+		typeBadge := ""
+		if m.Type == "task" {
+			typeBadge = prioStyle.Render("[task] ")
+		} else if m.Type == "scavenge" {
+			typeBadge = prioStyle.Render("[scav] ")
+		}
+
+		row := fmt.Sprintf("%s%s %s %s%s",
+			prefix, unreadSym, fromStyle.Render(from), typeBadge, subjectStyle.Render(subject))
+
+		if isSelected {
+			row = ui.GasTownAgentSelected.Width(width).Render(row)
+		}
+		lines = append(lines, row)
+
+		// Expanded: show full message body
+		if isExpanded {
+			bodyWidth := max(width-8, 20)
+			body := m.Body
+			if body == "" {
+				body = "(no body)"
+			}
+			// Wrap body lines
+			bodyStyle := lipgloss.NewStyle().Foreground(ui.Light).Width(bodyWidth)
+			lines = append(lines, "")
+			lines = append(lines, "      "+lipgloss.NewStyle().Foreground(ui.Dim).Render("From: ")+fromStyle.Render(m.From))
+			if m.Time != "" {
+				lines = append(lines, "      "+lipgloss.NewStyle().Foreground(ui.Dim).Render("Time: ")+lipgloss.NewStyle().Foreground(ui.Muted).Render(m.Time))
+			}
+			lines = append(lines, "")
+			for _, bline := range strings.Split(bodyStyle.Render(body), "\n") {
+				lines = append(lines, "      "+bline)
+			}
+			lines = append(lines, "")
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// renderConvoys renders the basic convoy section (fallback when no detail data).
 func renderConvoys(convoys []gastown.ConvoyInfo, width int) string {
 	var lines []string
 
 	lines = append(lines, ui.GasTownTitle.Render("CONVOYS"))
 
 	for _, c := range convoys {
-		// Title + status badge
 		statusStyle := lipgloss.NewStyle().Foreground(ui.Muted)
-		if c.Status == "rolling" || c.Status == "active" {
+		if c.Status == "rolling" || c.Status == "active" || c.Status == "open" {
 			statusStyle = lipgloss.NewStyle().Foreground(ui.BrightGreen)
 		}
 		titleLine := fmt.Sprintf("  %s  %s",
@@ -218,11 +789,7 @@ func renderConvoys(convoys []gastown.ConvoyInfo, width int) string {
 			statusStyle.Render("["+c.Status+"]"))
 		lines = append(lines, titleLine)
 
-		// Progress bar
-		barWidth := width - 16
-		if barWidth < 10 {
-			barWidth = 10
-		}
+		barWidth := max(width-16, 10)
 		bar := progressBar(c.Done, c.Total, barWidth)
 		label := fmt.Sprintf("%d/%d", c.Done, c.Total)
 		lines = append(lines, fmt.Sprintf("  %s %s", bar, ui.GasTownLabel.Render(label)))
@@ -231,18 +798,25 @@ func renderConvoys(convoys []gastown.ConvoyInfo, width int) string {
 	return strings.Join(lines, "\n")
 }
 
+func (g *GasTown) renderHints() string {
+	var hint string
+	switch g.section {
+	case SectionAgents:
+		hint = "n nudge  h handoff  K decommission  j/k navigate  tab section"
+	case SectionConvoys:
+		hint = "enter expand  l land  x close  j/k navigate  tab section"
+	case SectionMail:
+		hint = "enter read  r reply  d archive  j/k navigate  tab section"
+	}
+	return "\n" + ui.GasTownHint.Render(hint)
+}
+
 // progressBar renders a unicode block progress bar.
 func progressBar(done, total, width int) string {
 	if total <= 0 || width <= 0 {
 		return strings.Repeat(ui.SymProgressEmpty, width)
 	}
-	filled := done * width / total
-	if filled > width {
-		filled = width
-	}
-	if filled < 0 {
-		filled = 0
-	}
+	filled := max(min(done*width/total, width), 0)
 	empty := width - filled
 
 	filledStyle := lipgloss.NewStyle().Foreground(ui.BrightGreen)
