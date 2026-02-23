@@ -68,10 +68,14 @@ func (g *GasTown) renderContent() string {
 	}
 
 	if g.status == nil {
+		msg := ui.SymTown + " Gas Town not available"
+		if g.env.Available {
+			msg = ui.SymTown + " Loading Gas Town status..."
+		}
 		return lipgloss.NewStyle().
 			Width(contentWidth).
 			Foreground(ui.Muted).
-			Render(ui.SymTown + " Gas Town not available")
+			Render(msg)
 	}
 
 	var sections []string
@@ -133,7 +137,7 @@ func renderAgentRoster(agents []gastown.AgentRuntime, width int) string {
 
 	// Column widths
 	nameW := 14
-	roleW := 10
+	roleW := 14
 	stateW := 12
 
 	// Header row

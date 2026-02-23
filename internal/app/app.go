@@ -663,6 +663,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.showGasTown = !m.showGasTown
 		if m.showGasTown {
 			m.gasTown.SetStatus(m.townStatus, m.gtEnv)
+			// If status hasn't arrived yet (slow gt), trigger a fetch
+			if m.townStatus == nil {
+				return m, pollAgentState(m.gtEnv, m.inTmux)
+			}
 		}
 		return m, nil
 
