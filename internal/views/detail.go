@@ -217,6 +217,76 @@ func (d *Detail) renderContent() string {
 		}
 	}
 
+	// Quality (HOP)
+	if issue.QualityScore != nil {
+		lines = append(lines, "")
+		lines = append(lines, ui.DetailSection.Render("QUALITY"))
+		stars := ui.RenderStars(*issue.QualityScore)
+		scoreStr := fmt.Sprintf("%.2f (%s)", *issue.QualityScore, data.QualityLabel(*issue.QualityScore))
+		lines = append(lines, d.row("Score:", stars+" "+scoreStr))
+
+		if issue.Creator != nil {
+			creatorLabel := issue.Creator.Name
+			if issue.Creator.Platform != "" {
+				creatorLabel += " (" + issue.Creator.Platform + ")"
+			}
+			lines = append(lines, d.row("Creator:", ui.DetailValue.Render(creatorLabel)))
+		}
+
+		if len(issue.Validations) > 0 {
+			lines = append(lines, d.row("Validators:", ""))
+			for _, v := range issue.Validations {
+				var style lipgloss.Style
+				sym := ui.SymResolved
+				switch v.Outcome {
+				case data.OutcomeAccepted:
+					style = ui.ValidatorAccepted
+				case data.OutcomeRejected:
+					style = ui.ValidatorRejected
+					sym = "✗"
+				case data.OutcomeRevision:
+					style = ui.ValidatorRevision
+					sym = "↻"
+				}
+				label := fmt.Sprintf("  %s %s %s (%.1f)",
+					sym, v.Validator.Name, v.Outcome, v.QualityScore)
+				lines = append(lines, style.Render(label))
+			}
+		}
+
+		if issue.Crystallizes != nil {
+			if *issue.Crystallizes {
+				lines = append(lines, d.row("Nature:", ui.CrystalBadge.Render(ui.SymCrystal+" crystallizes")))
+			} else {
+				lines = append(lines, d.row("Nature:", ui.EphemeralBadge.Render(ui.SymEphemeral+" ephemeral")))
+			}
+		}
+	}
+
+	// Formula recommendation (for open/in-progress issues)
+	if issue.Status != data.StatusClosed {
+		recs := gastown.RecommendFormulas(*issue)
+		if len(recs) > 0 {
+			lines = append(lines, "")
+			lines = append(lines, ui.DetailSection.Render("FORMULA"))
+			top := recs[0]
+			formulaStyle := lipgloss.NewStyle().Foreground(ui.BrightGold).Bold(true)
+			lines = append(lines, d.row("Suggest:", formulaStyle.Render(top.Formula)))
+			lines = append(lines, d.row("", lipgloss.NewStyle().Foreground(ui.Dim).Render(top.Reason)))
+			if len(recs) > 1 {
+				altNames := make([]string, 0, min(len(recs)-1, 3))
+				for _, r := range recs[1:] {
+					if len(altNames) >= 3 {
+						break
+					}
+					altNames = append(altNames, r.Formula)
+				}
+				lines = append(lines, d.row("Alt:", lipgloss.NewStyle().Foreground(ui.Muted).Render(
+					strings.Join(altNames, ", "))))
+			}
+		}
+	}
+
 	// Description (markdown rendered)
 	if issue.Description != "" {
 		lines = append(lines, "")
@@ -305,6 +375,22 @@ func (d *Detail) renderContent() string {
 			lines = append(lines, ui.DepBlocks.Render(
 				fmt.Sprintf("  %s blocks %s %s (%s)", ui.SymRolling, ui.DepArrow, id, truncate(title, 30)),
 			))
+		}
+	}
+
+	// Cross-rig dependencies (external references)
+	crossRigRefs := data.CrossRigDeps(issue)
+	if len(crossRigRefs) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, ui.DetailSection.Render("CROSS-RIG"))
+		for _, ref := range crossRigRefs {
+			rigStyle := lipgloss.NewStyle().Foreground(ui.BrightPurple).Bold(true)
+			idStyle := lipgloss.NewStyle().Foreground(ui.Light)
+			lines = append(lines, fmt.Sprintf("  %s %s %s %s",
+				ui.DepArrow,
+				rigStyle.Render(ref.Rig),
+				idStyle.Render(ref.IssueID),
+				lipgloss.NewStyle().Foreground(ui.Dim).Render("(external)")))
 		}
 	}
 
