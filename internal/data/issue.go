@@ -106,6 +106,7 @@ type Issue struct {
 	Notes              string       `json:"notes,omitempty"`
 	Design             string       `json:"design,omitempty"`
 	AcceptanceCriteria string       `json:"acceptance_criteria,omitempty"`
+	Labels             []string     `json:"labels,omitempty"`
 	DueAt              *time.Time   `json:"due_at,omitempty"`
 	DeferUntil         *time.Time   `json:"defer_until,omitempty"`
 

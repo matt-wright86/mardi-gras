@@ -263,6 +263,30 @@ func (d *Detail) renderContent() string {
 		}
 	}
 
+	// Formula recommendation (for open/in-progress issues)
+	if issue.Status != data.StatusClosed {
+		recs := gastown.RecommendFormulas(*issue)
+		if len(recs) > 0 {
+			lines = append(lines, "")
+			lines = append(lines, ui.DetailSection.Render("FORMULA"))
+			top := recs[0]
+			formulaStyle := lipgloss.NewStyle().Foreground(ui.BrightGold).Bold(true)
+			lines = append(lines, d.row("Suggest:", formulaStyle.Render(top.Formula)))
+			lines = append(lines, d.row("", lipgloss.NewStyle().Foreground(ui.Dim).Render(top.Reason)))
+			if len(recs) > 1 {
+				altNames := make([]string, 0, min(len(recs)-1, 3))
+				for _, r := range recs[1:] {
+					if len(altNames) >= 3 {
+						break
+					}
+					altNames = append(altNames, r.Formula)
+				}
+				lines = append(lines, d.row("Alt:", lipgloss.NewStyle().Foreground(ui.Muted).Render(
+					strings.Join(altNames, ", "))))
+			}
+		}
+	}
+
 	// Description (markdown rendered)
 	if issue.Description != "" {
 		lines = append(lines, "")

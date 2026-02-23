@@ -536,6 +536,39 @@ func TestQualitySectionNotRenderedWithoutScore(t *testing.T) {
 	}
 }
 
+func TestFormulaRecommendationRendered(t *testing.T) {
+	issues := []data.Issue{
+		{ID: "bd-001", Title: "Add authentication middleware", Status: data.StatusOpen,
+			Priority: data.PriorityHigh, IssueType: data.TypeFeature, CreatedAt: time.Now()},
+	}
+	d := NewDetail(80, 40, issues)
+	d.SetIssue(&issues[0])
+
+	content := d.renderContent()
+
+	if !strings.Contains(content, "FORMULA") {
+		t.Error("content should contain FORMULA section for open issue")
+	}
+	if !strings.Contains(content, "security-audit") {
+		t.Error("content should contain security-audit recommendation for auth issue")
+	}
+}
+
+func TestFormulaRecommendationNotRenderedForClosed(t *testing.T) {
+	issues := []data.Issue{
+		{ID: "bd-001", Title: "Add authentication middleware", Status: data.StatusClosed,
+			Priority: data.PriorityHigh, IssueType: data.TypeFeature, CreatedAt: time.Now()},
+	}
+	d := NewDetail(80, 40, issues)
+	d.SetIssue(&issues[0])
+
+	content := d.renderContent()
+
+	if strings.Contains(content, "FORMULA") {
+		t.Error("content should not contain FORMULA section for closed issue")
+	}
+}
+
 func TestQualityRejectedValidation(t *testing.T) {
 	score := float32(0.3)
 	issues := []data.Issue{
