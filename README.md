@@ -96,20 +96,47 @@ Mardi Gras polls your JSONL file on a short interval. No OS-specific file watche
 
 ## Keybindings
 
-| Key       | Action                                                                   |
-| --------- | ------------------------------------------------------------------------ |
-| `?`       | Toggle help overlay                                                      |
-| `j` / `k` | Navigate up/down                                                         |
-| `/`       | Enter filter mode                                                        |
-| `esc`     | Clear filter (in filter mode) / Back to parade pane / Close help overlay |
-| `enter`   | Apply filter (in filter mode) / Focus detail pane                        |
-| `tab`     | Switch between parade and detail panes                                   |
-| `c`       | Toggle closed issues                                                     |
-| `a`       | Launch Claude agent (tmux: new window; otherwise: suspend TUI)           |
-| `A`       | Kill active agent on selected issue (tmux only)                          |
-| `g` / `G` | Jump to top / bottom                                                     |
-| `q`       | Quit (or close help overlay if open)                                     |
-| `ctrl+c`  | Quit (global)                                                            |
+| Key          | Action                                                                   |
+| ------------ | ------------------------------------------------------------------------ |
+| `?`          | Toggle help overlay                                                      |
+| `j` / `k`    | Navigate up/down                                                         |
+| `/`          | Enter filter mode                                                        |
+| `esc`        | Clear filter (in filter mode) / Back to parade pane / Close help overlay |
+| `enter`      | Apply filter (in filter mode) / Focus detail pane                        |
+| `tab`        | Switch between parade and detail panes                                   |
+| `c`          | Toggle closed issues                                                     |
+| `f`          | Toggle focus mode (my work + top priority)                               |
+| `1` / `2` / `3` | Set status: in_progress / open / closed                              |
+| `a`          | Launch Claude agent (tmux: new window; otherwise: suspend TUI)           |
+| `A`          | Kill active agent on selected issue (tmux only)                          |
+| `g` / `G`    | Jump to top / bottom                                                     |
+| `b`          | Copy branch name to clipboard                                            |
+| `B`          | Create + checkout git branch                                             |
+| `N`          | Create new issue                                                         |
+| `: / Ctrl+K` | Open command palette                                                    |
+| `q`          | Quit (or close help overlay if open)                                     |
+| `ctrl+c`     | Quit (global)                                                            |
+
+### Multi-select
+
+| Key           | Action                              |
+| ------------- | ----------------------------------- |
+| `space` / `x` | Toggle select on cursor issue      |
+| `Shift+J/K`   | Select and move down/up            |
+| `X`           | Clear all selections                |
+| `1/2/3`       | Bulk set status on selected         |
+| `a`           | Sling all selected issues           |
+| `s`           | Pick formula and sling all selected |
+
+### Gas Town (when `gt` detected)
+
+| Key       | Action                          |
+| --------- | ------------------------------- |
+| `ctrl+g`  | Toggle Gas Town dashboard panel |
+| `a`       | Sling issue to polecat          |
+| `s`       | Pick formula and sling          |
+| `n`       | Nudge agent with message        |
+| `A`       | Unsling / kill agent            |
 
 Press `?` from anywhere (including while filtering) to open the full command reference overlay.
 
@@ -206,6 +233,34 @@ Outside tmux, the TUI suspends while Claude runs (using BubbleTea's `tea.ExecPro
 - If `claude` is not installed, the `a` key silently does nothing
 - Tmux dispatch requires both the `TMUX` env var and `tmux` binary on PATH
 - The prompt includes `bd update` and `bd close` hints so Claude knows how to manage the issue lifecycle
+
+## Gas Town Integration
+
+[Gas Town](https://github.com/steveyegge/gastown) is a multi-agent orchestrator for Claude Code. When `gt` is on your PATH, Mardi Gras lights up with agent-aware features:
+
+### Control Surface (`ctrl+g`)
+
+Press `ctrl+g` to replace the detail pane with the Gas Town dashboard:
+
+- **Agent Roster** — all agents across rigs with role, state (working/idle/backoff), current work, and unread mail count
+- **Convoy Progress** — delivery batches shown as progress bars with status badges
+- **Live refresh** — the panel updates as `gt status` data arrives
+
+The panel scrolls with `j/k` and toggles back to the detail view with `ctrl+g` again.
+
+### Sling & Nudge
+
+When running inside a Gas Town workspace, the `a` key dispatches issues to polecats via `gt sling` instead of launching raw Claude sessions. Additional commands:
+
+- `s` — choose a formula (workflow template) before slinging
+- `n` — send a nudge message to the agent working on the selected issue
+- `A` — unsling an issue from its polecat
+
+Multi-select (`space` to mark, then `a` or `s`) slings multiple issues in one batch.
+
+### Environment
+
+Gas Town features activate automatically when `gt` is on your PATH. Inside a Gas Town-managed session (polecat, crew, etc.), additional context from `GT_ROLE`, `GT_RIG`, and `GT_SCOPE` env vars appears in the header and Gas Town panel.
 
 ## Built with
 
