@@ -134,30 +134,86 @@ func TestTownStatusUnreadMail(t *testing.T) {
 }
 
 func TestTownStatusParsing(t *testing.T) {
-	// Verify our structs can parse representative JSON
+	// Verify parsing against real gt status --json shape
 	raw := `{
+		"name": "test-hq",
+		"location": "/tmp/gt",
 		"agents": [
-			{"name":"Toast","role":"polecat","rig":"beads","running":true,
-			 "has_work":true,"work_title":"Fix login","hook_bead":"bd-a1b2",
-			 "state":"working","unread_mail":0}
+			{"name":"mayor","address":"mayor/","session":"hq-mayor",
+			 "role":"coordinator","running":true,"has_work":false,"unread_mail":0}
 		],
-		"rigs": [{"name":"beads","agents":3}],
-		"convoys": [{"id":"hq-x1","title":"Auth fixes","status":"open","done":2,"total":5}]
+		"rigs": [{
+			"name":"beads",
+			"polecat_count":2,
+			"crew_count":1,
+			"has_witness":true,
+			"has_refinery":true,
+			"hooks": [
+				{"agent":"beads/toast","role":"polecat","has_work":true,"title":"Fix login"}
+			],
+			"agents": [
+				{"name":"toast","address":"beads/toast","session":"mg-toast",
+				 "role":"polecat","running":true,"has_work":true,
+				 "work_title":"Fix login","hook_bead":"bd-a1b2",
+				 "state":"working","unread_mail":0},
+				{"name":"muffin","address":"beads/muffin","session":"mg-muffin",
+				 "role":"polecat","running":false,"has_work":false,"unread_mail":2}
+			]
+		}],
+		"summary": {"rig_count":1,"polecat_count":2,"crew_count":1,
+			"witness_count":1,"refinery_count":1,"active_hooks":1}
 	}`
-	var status TownStatus
-	if err := json.Unmarshal([]byte(raw), &status); err != nil {
+	var rawStatus rawTownStatus
+	if err := json.Unmarshal([]byte(raw), &rawStatus); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	if len(status.Agents) != 1 || status.Agents[0].Name != "Toast" {
-		t.Errorf("unexpected agents: %+v", status.Agents)
+	status := normalizeStatus(&rawStatus)
+
+	// Top-level agents (mayor) + rig agents (toast, muffin) = 3
+	if len(status.Agents) != 3 {
+		t.Errorf("expected 3 agents, got %d", len(status.Agents))
 	}
-	if status.WorkingCount() != 1 {
-		t.Errorf("expected 1 working, got %d", status.WorkingCount())
+
+	// Find toast in flattened agents
+	var toast *AgentRuntime
+	for i := range status.Agents {
+		if status.Agents[i].Name == "toast" {
+			toast = &status.Agents[i]
+			break
+		}
 	}
+	if toast == nil {
+		t.Fatal("toast not found in flattened agents")
+	}
+	if toast.Rig != "beads" {
+		t.Errorf("expected toast.Rig=beads, got %q", toast.Rig)
+	}
+	if toast.State != "working" {
+		t.Errorf("expected toast.State=working, got %q", toast.State)
+	}
+	if toast.HookBead != "bd-a1b2" {
+		t.Errorf("expected toast.HookBead=bd-a1b2, got %q", toast.HookBead)
+	}
+
+	// Muffin should get idle state inferred
+	var muffin *AgentRuntime
+	for i := range status.Agents {
+		if status.Agents[i].Name == "muffin" {
+			muffin = &status.Agents[i]
+			break
+		}
+	}
+	if muffin == nil {
+		t.Fatal("muffin not found in flattened agents")
+	}
+	if muffin.State != "idle" {
+		t.Errorf("expected muffin.State=idle, got %q", muffin.State)
+	}
+
 	if len(status.Rigs) != 1 || status.Rigs[0].Name != "beads" {
 		t.Errorf("unexpected rigs: %+v", status.Rigs)
 	}
-	if len(status.Convoys) != 1 || status.Convoys[0].ID != "hq-x1" {
-		t.Errorf("unexpected convoys: %+v", status.Convoys)
+	if status.WorkingCount() != 1 {
+		t.Errorf("expected 1 working, got %d", status.WorkingCount())
 	}
 }

@@ -6,7 +6,8 @@ import (
 	"os/exec"
 )
 
-// TownStatus is the parsed output of `gt status --json`.
+// TownStatus is the normalized view of `gt status --json`.
+// The Agents slice is flattened from both top-level and per-rig agents.
 type TownStatus struct {
 	Agents  []AgentRuntime `json:"agents"`
 	Rigs    []RigStatus    `json:"rigs"`
@@ -24,12 +25,17 @@ type AgentRuntime struct {
 	HookBead  string `json:"hook_bead"`
 	State     string `json:"state"`
 	Mail      int    `json:"unread_mail"`
+	Address   string `json:"address"`
+	Session   string `json:"session"`
 }
 
 // RigStatus represents a Gas Town rig (project).
 type RigStatus struct {
-	Name   string `json:"name"`
-	Agents int    `json:"agents"`
+	Name         string `json:"name"`
+	PolecatCount int    `json:"polecat_count"`
+	CrewCount    int    `json:"crew_count"`
+	HasWitness   bool   `json:"has_witness"`
+	HasRefinery  bool   `json:"has_refinery"`
 }
 
 // ConvoyInfo represents a Gas Town convoy (delivery batch).
@@ -41,6 +47,32 @@ type ConvoyInfo struct {
 	Total  int    `json:"total"`
 }
 
+// rawTownStatus matches the actual `gt status --json` output shape.
+type rawTownStatus struct {
+	Name    string          `json:"name"`
+	Agents  []AgentRuntime  `json:"agents"`
+	Rigs    []rawRigStatus  `json:"rigs"`
+	Convoys []ConvoyInfo    `json:"convoys"`
+}
+
+type rawRigStatus struct {
+	Name         string         `json:"name"`
+	PolecatCount int            `json:"polecat_count"`
+	CrewCount    int            `json:"crew_count"`
+	HasWitness   bool           `json:"has_witness"`
+	HasRefinery  bool           `json:"has_refinery"`
+	Agents       []AgentRuntime `json:"agents"`
+	Hooks        []rawHook      `json:"hooks"`
+}
+
+type rawHook struct {
+	Agent    string `json:"agent"`
+	Role     string `json:"role"`
+	HasWork  bool   `json:"has_work"`
+	Molecule string `json:"molecule,omitempty"`
+	Title    string `json:"title,omitempty"`
+}
+
 // FetchStatus runs `gt status --json` and parses the output.
 // Returns nil TownStatus (not error) if gt is not available.
 func FetchStatus() (*TownStatus, error) {
@@ -48,11 +80,60 @@ func FetchStatus() (*TownStatus, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gt status: %w", err)
 	}
-	var status TownStatus
-	if err := json.Unmarshal(out, &status); err != nil {
+	var raw rawTownStatus
+	if err := json.Unmarshal(out, &raw); err != nil {
 		return nil, fmt.Errorf("gt status parse: %w", err)
 	}
-	return &status, nil
+	return normalizeStatus(&raw), nil
+}
+
+// normalizeStatus flattens the raw gt output into a unified TownStatus.
+func normalizeStatus(raw *rawTownStatus) *TownStatus {
+	status := &TownStatus{
+		Agents:  raw.Agents,
+		Convoys: raw.Convoys,
+	}
+
+	for _, rig := range raw.Rigs {
+		status.Rigs = append(status.Rigs, RigStatus{
+			Name:         rig.Name,
+			PolecatCount: rig.PolecatCount,
+			CrewCount:    rig.CrewCount,
+			HasWitness:   rig.HasWitness,
+			HasRefinery:  rig.HasRefinery,
+		})
+
+		// Build hook lookup: agent address -> hook info
+		hookMap := make(map[string]rawHook, len(rig.Hooks))
+		for _, h := range rig.Hooks {
+			hookMap[h.Agent] = h
+		}
+
+		// Merge rig agents, enriching with hook data and rig name
+		for _, a := range rig.Agents {
+			a.Rig = rig.Name
+			if a.State == "" {
+				if a.Running {
+					a.State = "working"
+				} else {
+					a.State = "idle"
+				}
+			}
+			// Enrich from hook data
+			if h, ok := hookMap[a.Address]; ok {
+				a.HasWork = h.HasWork
+				if h.Molecule != "" {
+					a.HookBead = h.Molecule
+				}
+				if h.Title != "" {
+					a.WorkTitle = h.Title
+				}
+			}
+			status.Agents = append(status.Agents, a)
+		}
+	}
+
+	return status
 }
 
 // AgentForIssue returns the agent working on a given issue, if any.
