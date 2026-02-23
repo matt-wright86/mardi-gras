@@ -56,6 +56,9 @@ type GasTown struct {
 
 	// Velocity metrics
 	velocity *gastown.VelocityMetrics
+
+	// Agent scorecards (HOP quality aggregates)
+	scorecards []gastown.AgentScorecard
 }
 
 // NewGasTown creates a Gas Town panel.
@@ -146,6 +149,11 @@ func (g *GasTown) SetEvents(events []gastown.Event) {
 // SetVelocity updates the velocity metrics.
 func (g *GasTown) SetVelocity(v *gastown.VelocityMetrics) {
 	g.velocity = v
+}
+
+// SetScorecards updates the agent quality scorecards.
+func (g *GasTown) SetScorecards(cards []gastown.AgentScorecard) {
+	g.scorecards = cards
 }
 
 // SelectedMail returns the currently selected mail message, or nil if none.
@@ -477,6 +485,10 @@ func (g *GasTown) renderContent() string {
 
 	if g.velocity != nil {
 		sections = append(sections, g.renderVelocity(contentWidth))
+	}
+
+	if len(g.scorecards) > 0 {
+		sections = append(sections, g.renderScorecards(contentWidth))
 	}
 
 	// Hint bar at bottom
@@ -1071,6 +1083,45 @@ func formatEventTime(ts string) string {
 	default:
 		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 	}
+}
+
+// renderScorecards renders the HOP agent quality scorecards section.
+func (g *GasTown) renderScorecards(_ int) string {
+	var lines []string
+
+	header := fmt.Sprintf("SCORECARDS%s",
+		lipgloss.NewStyle().Foreground(ui.Muted).Render(
+			fmt.Sprintf("  %d agents", len(g.scorecards))))
+	lines = append(lines, ui.GasTownTitle.Render(header))
+
+	labelStyle := lipgloss.NewStyle().Foreground(ui.Dim)
+	nameStyle := lipgloss.NewStyle().Foreground(ui.Light)
+
+	for _, sc := range g.scorecards {
+		stars := ""
+		if sc.TotalScored > 0 {
+			stars = ui.RenderStarsCompact(sc.AvgQuality) + " "
+		}
+
+		crystLabel := ""
+		if sc.Crystallizing > 0 || sc.Ephemeral > 0 {
+			crystLabel = fmt.Sprintf("  %s%d%s%d",
+				lipgloss.NewStyle().Foreground(ui.CrystalColor).Render(ui.SymCrystal),
+				sc.Crystallizing,
+				lipgloss.NewStyle().Foreground(ui.EphemeralColor).Render(ui.SymEphemeral),
+				sc.Ephemeral)
+		}
+
+		line := fmt.Sprintf("  %s%-12s %s%s closed %s",
+			stars,
+			nameStyle.Render(sc.Name),
+			labelStyle.Render(fmt.Sprintf("%d", sc.IssuesClosed)),
+			labelStyle.Render(" closed"),
+			crystLabel)
+		lines = append(lines, line)
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 func (g *GasTown) renderHints() string {

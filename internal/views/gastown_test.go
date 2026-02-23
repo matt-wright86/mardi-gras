@@ -1122,6 +1122,40 @@ func TestGasTownMailComposeFromMail(t *testing.T) {
 	}
 }
 
+func TestGasTownSetScorecards(t *testing.T) {
+	g := NewGasTown(100, 30)
+	status := &gastown.TownStatus{Agents: []gastown.AgentRuntime{}}
+	g.SetStatus(status, gastown.Env{Available: true})
+
+	cards := []gastown.AgentScorecard{
+		{Name: "Toast", IssuesClosed: 5, AvgQuality: 0.85, TotalScored: 4, Crystallizing: 3, Ephemeral: 1},
+		{Name: "Muffin", IssuesClosed: 3, AvgQuality: 0.70, TotalScored: 3, Crystallizing: 2},
+	}
+	g.SetScorecards(cards)
+
+	view := g.View()
+	if !strings.Contains(view, "SCORECARDS") {
+		t.Fatal("view should contain SCORECARDS section")
+	}
+	if !strings.Contains(view, "Toast") {
+		t.Fatal("view should contain agent name 'Toast'")
+	}
+	if !strings.Contains(view, "Muffin") {
+		t.Fatal("view should contain agent name 'Muffin'")
+	}
+}
+
+func TestGasTownNoScorecardsSection(t *testing.T) {
+	g := NewGasTown(100, 30)
+	status := &gastown.TownStatus{Agents: []gastown.AgentRuntime{}}
+	g.SetStatus(status, gastown.Env{Available: true})
+
+	view := g.View()
+	if strings.Contains(view, "SCORECARDS") {
+		t.Fatal("view should not contain SCORECARDS section when no data")
+	}
+}
+
 func TestGasTownMailComposeNoActionInConvoySection(t *testing.T) {
 	g := NewGasTown(100, 30)
 	status := &gastown.TownStatus{Agents: []gastown.AgentRuntime{}}

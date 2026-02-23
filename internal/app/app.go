@@ -1989,7 +1989,7 @@ func (m *Model) restoreParadeSelection(issueID string) {
 	}
 }
 
-// recomputeVelocity recalculates velocity metrics from current data
+// recomputeVelocity recalculates velocity metrics and scorecards from current data
 // and pushes them to the Gas Town panel (only when visible).
 func (m *Model) recomputeVelocity() {
 	if !m.showGasTown {
@@ -1997,6 +1997,9 @@ func (m *Model) recomputeVelocity() {
 	}
 	v := gastown.ComputeVelocity(m.issues, m.townStatus, m.gasTown.GetCosts())
 	m.gasTown.SetVelocity(v)
+
+	cards := gastown.ComputeScorecards(m.issues)
+	m.gasTown.SetScorecards(cards)
 }
 
 // propagateAgentState pushes active agent info to all sub-views.

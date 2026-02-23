@@ -77,4 +77,11 @@ const (
 	SymStepBlocked = "⊘"
 	SymStepSkipped = "─"
 	SymTierLine    = "│"
+
+	// HOP quality indicators
+	SymStar      = "★"
+	SymStarEmpty = "☆"
+	SymCrystal   = "◆"
+	SymEphemeral = "◇"
+	SymValidator = "⚖"
 )
