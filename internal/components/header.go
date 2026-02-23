@@ -62,6 +62,16 @@ func (h Header) View() string {
 			parts = append(parts, fmt.Sprintf("%s%d", ui.SymConvoy, activeConvoys))
 		}
 
+		if mq := h.TownStatus.MQStatus(); mq != nil && (mq.Pending > 0 || mq.InFlight > 0) {
+			mqLabel := fmt.Sprintf("MQ:%d", mq.Pending+mq.InFlight)
+			if mq.Health == "stale" || mq.State == "blocked" {
+				mqLabel = lipgloss.NewStyle().Foreground(ui.StatusStalled).Bold(true).Render(mqLabel)
+			} else {
+				mqLabel = gtStyle.Render(mqLabel)
+			}
+			parts = append(parts, mqLabel)
+		}
+
 		gasTownInfo = gtStyle.Render(" " + strings.Join(parts, " "))
 	}
 

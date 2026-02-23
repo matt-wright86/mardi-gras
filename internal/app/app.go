@@ -269,6 +269,12 @@ type moleculeStepDoneMsg struct {
 	err    error
 }
 
+type commentsMsg struct {
+	issueID  string
+	comments []gastown.Comment
+	err      error
+}
+
 // mutateResultMsg is sent when a bd CLI mutation completes.
 type mutateResultMsg struct {
 	issueID string
@@ -808,6 +814,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 
+	case commentsMsg:
+		if msg.err == nil && len(msg.comments) > 0 {
+			if m.detail.Issue != nil && m.detail.Issue.ID == msg.issueID {
+				m.detail.SetComments(msg.issueID, msg.comments)
+			}
+		}
+		return m, nil
+
 	case views.GasTownActionMsg:
 		return m.handleGasTownAction(msg)
 
@@ -1215,8 +1229,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m.activPane = PaneDetail
 			m.detail.Focused = true
+			var cmds []tea.Cmd
 			if cmd := m.maybeFetchMolecule(); cmd != nil {
-				return m, cmd
+				cmds = append(cmds, cmd)
+			}
+			if cmd := m.maybeFetchComments(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+			if len(cmds) > 0 {
+				return m, tea.Batch(cmds...)
 			}
 		}
 		return m, nil
@@ -1672,6 +1693,19 @@ func (m *Model) maybeFetchMolecule() tea.Cmd {
 	return fetchMoleculeDAG(issue.ID)
 }
 
+// maybeFetchComments returns a Cmd to fetch comments for the selected issue.
+func (m *Model) maybeFetchComments() tea.Cmd {
+	issue := m.parade.SelectedIssue
+	if issue == nil {
+		return nil
+	}
+	// Don't re-fetch if we already have comments for this issue
+	if m.detail.CommentsIssueID == issue.ID && len(m.detail.Comments) > 0 {
+		return nil
+	}
+	return fetchComments(issue.ID)
+}
+
 // layout recalculates dimensions for all sub-components.
 func (m *Model) layout() {
 	headerH := 2
@@ -1841,6 +1875,14 @@ func fetchConvoyList() tea.Msg {
 func fetchMailInbox() tea.Msg {
 	msgs, err := gastown.MailInbox(false)
 	return mailInboxMsg{messages: msgs, err: err}
+}
+
+// fetchComments returns a Cmd that fetches comments for an issue.
+func fetchComments(issueID string) tea.Cmd {
+	return func() tea.Msg {
+		comments, err := gastown.FetchComments(issueID)
+		return commentsMsg{issueID: issueID, comments: comments, err: err}
+	}
 }
 
 // fetchMoleculeDAG returns a Cmd that fetches molecule DAG and progress for an issue.
