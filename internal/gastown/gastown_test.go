@@ -51,9 +51,9 @@ func TestDetectCrewWorker(t *testing.T) {
 func TestTownStatusAgentForIssue(t *testing.T) {
 	status := &TownStatus{
 		Agents: []AgentRuntime{
-			{Name: "Toast", Role: "polecat", HookBead: "bd-a1b2", Running: true, HasWork: true},
-			{Name: "Muffin", Role: "polecat", HookBead: "bd-c3d4", Running: true, HasWork: true},
-			{Name: "Whiskers", Role: "polecat", HookBead: "", Running: true, HasWork: false},
+			{Name: "Toast", Role: "polecat", HookBead: "bd-a1b2", HasWork: true, State: "working"},
+			{Name: "Muffin", Role: "polecat", HookBead: "bd-c3d4", HasWork: true, State: "working"},
+			{Name: "Whiskers", Role: "polecat", HookBead: "", HasWork: false, State: "idle"},
 		},
 	}
 	agent := status.AgentForIssue("bd-a1b2")
@@ -75,9 +75,9 @@ func TestTownStatusAgentForIssueNil(t *testing.T) {
 func TestTownStatusActiveAgentMap(t *testing.T) {
 	status := &TownStatus{
 		Agents: []AgentRuntime{
-			{Name: "Toast", HookBead: "bd-a1b2", Running: true},
-			{Name: "Muffin", HookBead: "", Running: true},        // no hook
-			{Name: "Stale", HookBead: "bd-e5f6", Running: false}, // not running
+			{Name: "Toast", HookBead: "bd-a1b2", State: "working"},
+			{Name: "Muffin", HookBead: "", State: "working"},      // no hook
+			{Name: "Stale", HookBead: "bd-e5f6", State: "idle"},   // idle
 		},
 	}
 	m := status.ActiveAgentMap()
@@ -100,9 +100,9 @@ func TestTownStatusActiveAgentMapNil(t *testing.T) {
 func TestTownStatusWorkingCount(t *testing.T) {
 	status := &TownStatus{
 		Agents: []AgentRuntime{
-			{Name: "Toast", HasWork: true, Running: true},
-			{Name: "Muffin", HasWork: false, Running: true},
-			{Name: "Stale", HasWork: true, Running: false},
+			{Name: "Toast", HasWork: true, State: "working"},
+			{Name: "Muffin", HasWork: false, State: "idle"},
+			{Name: "Stale", HasWork: true, State: "idle"},
 		},
 	}
 	if got := status.WorkingCount(); got != 1 {
@@ -140,7 +140,7 @@ func TestTownStatusParsing(t *testing.T) {
 		"location": "/tmp/gt",
 		"agents": [
 			{"name":"mayor","address":"mayor/","session":"hq-mayor",
-			 "role":"coordinator","running":true,"has_work":false,"unread_mail":0}
+			 "role":"coordinator","has_work":false,"unread_mail":0}
 		],
 		"rigs": [{
 			"name":"beads",
@@ -153,11 +153,11 @@ func TestTownStatusParsing(t *testing.T) {
 			],
 			"agents": [
 				{"name":"toast","address":"beads/toast","session":"mg-toast",
-				 "role":"polecat","running":true,"has_work":true,
+				 "role":"polecat","has_work":true,
 				 "work_title":"Fix login","hook_bead":"bd-a1b2",
 				 "state":"working","unread_mail":0},
 				{"name":"muffin","address":"beads/muffin","session":"mg-muffin",
-				 "role":"polecat","running":false,"has_work":false,"unread_mail":2}
+				 "role":"polecat","has_work":false,"unread_mail":2,"state":"idle"}
 			]
 		}],
 		"summary": {"rig_count":1,"polecat_count":2,"crew_count":1,

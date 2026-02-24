@@ -120,7 +120,9 @@ func AgentProductivity(issues []data.Issue, costs *CostsOutput) float64 {
 		return 0
 	}
 	var closedToday int
-	todayStart := time.Now().Truncate(24 * time.Hour)
+	now := time.Now()
+	y, m, d := now.Date()
+	todayStart := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
 	for _, iss := range issues {
 		if iss.Status == data.StatusClosed && iss.ClosedAt != nil {
 			if iss.ClosedAt.After(todayStart) || iss.ClosedAt.Equal(todayStart) {

@@ -374,12 +374,12 @@ Features activate progressively: Beads-only (no gt) → Gas Town available (gt o
 
 `FetchStatus()` runs `gt status --json` and parses the result. Key gotcha: `gt status --json` takes **~9 seconds** to complete. The JSON nests agents under `rigs[].agents`; `normalizeStatus()` flattens them into a single `Agents` slice for the UI. Top-level agents are HQ-level (mayor, deacon); rig agents include polecats, crew, witness, refinery.
 
-If `AgentRuntime.State` is empty, state is inferred from `Running`: true → "working", false → "idle".
+If `AgentRuntime.State` is empty, it defaults to "idle". Gas Town v0.8.0+ always provides State; the `Running` field was removed upstream.
 
 ### Sling & Dispatch (sling.go)
 
 - `Sling(issue, rig)` — dispatch to polecat via `gt sling`
-- `SlingWithFormula(issue, rig, formula)` — sling with specific formula
+- `SlingWithFormula(issue, formula)` — sling with specific formula (`gt sling <formula> --on <issue>`)
 - `MultiSling(issues, rig)` — batch dispatch
 - `Unsling(issue)` — remove assignment
 - `Nudge(address, message)` — send nudge to agent
@@ -448,7 +448,7 @@ DepEval        (computed from EvaluateDependencies)
   IsBlocked, NextBlockerID
 
 AgentRuntime   (from gastown/status.go)
-  Name, Address, Role, State, Running
+  Name, Address, Role, State
   HasWork, WorkTitle, HookBead, UnreadMail
 
 TownStatus     (from gastown/status.go)

@@ -12,7 +12,7 @@ func TestDetectProblemsNil(t *testing.T) {
 func TestDetectProblemsStalled(t *testing.T) {
 	status := &TownStatus{
 		Agents: []AgentRuntime{
-			{Name: "Toast", Role: "polecat", Running: true, HasWork: true, State: "idle"},
+			{Name: "Toast", Role: "polecat", HasWork: true, State: "idle"},
 		},
 	}
 	problems := DetectProblems(status)
@@ -33,7 +33,7 @@ func TestDetectProblemsStalled(t *testing.T) {
 func TestDetectProblemsBackoff(t *testing.T) {
 	status := &TownStatus{
 		Agents: []AgentRuntime{
-			{Name: "Muffin", Role: "polecat", Running: true, State: "backoff"},
+			{Name: "Muffin", Role: "polecat", State: "backoff"},
 		},
 	}
 	problems := DetectProblems(status)
@@ -48,7 +48,7 @@ func TestDetectProblemsBackoff(t *testing.T) {
 func TestDetectProblemsZombie(t *testing.T) {
 	status := &TownStatus{
 		Agents: []AgentRuntime{
-			{Name: "Stale", Role: "polecat", Running: false, HookBead: "bd-e5f6"},
+			{Name: "Stale", Role: "polecat", HookBead: "bd-e5f6"},
 		},
 	}
 	problems := DetectProblems(status)
@@ -63,12 +63,33 @@ func TestDetectProblemsZombie(t *testing.T) {
 	}
 }
 
+func TestDetectProblemsStuck(t *testing.T) {
+	status := &TownStatus{
+		Agents: []AgentRuntime{
+			{Name: "Granite", Role: "polecat", State: "stuck"},
+		},
+	}
+	problems := DetectProblems(status)
+	if len(problems) != 1 {
+		t.Fatalf("expected 1 problem, got %d", len(problems))
+	}
+	if problems[0].Type != "stuck" {
+		t.Errorf("expected type 'stuck', got %q", problems[0].Type)
+	}
+	if problems[0].Severity != "error" {
+		t.Errorf("expected severity 'error', got %q", problems[0].Severity)
+	}
+	if problems[0].Agent.Name != "Granite" {
+		t.Errorf("expected agent 'Granite', got %q", problems[0].Agent.Name)
+	}
+}
+
 func TestDetectProblemsHealthy(t *testing.T) {
 	status := &TownStatus{
 		Agents: []AgentRuntime{
-			{Name: "Toast", Role: "polecat", Running: true, HasWork: true, State: "working"},
-			{Name: "Muffin", Role: "polecat", Running: true, HasWork: false, State: "idle"},
-			{Name: "Witness", Role: "witness", Running: true, State: "working"},
+			{Name: "Toast", Role: "polecat", HasWork: true, State: "working"},
+			{Name: "Muffin", Role: "polecat", State: "idle"},
+			{Name: "Witness", Role: "witness", State: "working"},
 		},
 	}
 	problems := DetectProblems(status)
@@ -80,9 +101,9 @@ func TestDetectProblemsHealthy(t *testing.T) {
 func TestDetectProblemsMultiple(t *testing.T) {
 	status := &TownStatus{
 		Agents: []AgentRuntime{
-			{Name: "Toast", Role: "polecat", Running: true, HasWork: true, State: "idle"},        // stalled
-			{Name: "Muffin", Role: "polecat", Running: true, State: "backoff"},                    // backoff
-			{Name: "Stale", Role: "polecat", Running: false, HookBead: "bd-e5f6", State: "idle"}, // zombie
+			{Name: "Toast", Role: "polecat", HasWork: true, State: "idle"},   // stalled
+			{Name: "Muffin", Role: "polecat", State: "backoff"},               // backoff
+			{Name: "Stale", Role: "polecat", HookBead: "bd-e5f6"},            // zombie
 		},
 	}
 	problems := DetectProblems(status)

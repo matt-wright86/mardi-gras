@@ -16,7 +16,7 @@ func Sling(issueID string) error {
 // e.g., SlingWithFormula("bd-a1b2", "shiny") runs the full
 // design->implement->review->test->submit workflow.
 func SlingWithFormula(issueID, formula string) error {
-	return exec.Command("gt", "sling", "--formula", formula, issueID).Run()
+	return exec.Command("gt", "sling", formula, "--on", issueID).Run()
 }
 
 // ListFormulas returns available formula names by parsing `gt formula list`.
