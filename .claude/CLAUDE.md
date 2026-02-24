@@ -42,7 +42,7 @@ This project uses [Beads](https://github.com/beads-project/beads) for issue trac
 
 ```bash
 bd ready                              # Find unblocked work
-bd update <id> --status=in_progress   # Claim an issue
+bd update <id> --claim                # Atomically claim an issue (assignee + in_progress)
 bd close <id>                         # Mark done
 bd sync                               # Sync beads data
 ```
@@ -65,7 +65,7 @@ Mardi Gras integrates with [Gas Town](https://github.com/steveyegge/gastown) (`g
 
 **Key gotcha**: `gt status --json` takes ~9 seconds to run. Background polling via BubbleTea Cmds may not return before the user interacts. The Gas Town panel (`ctrl+g`) triggers an on-demand fetch if status is nil and shows a loading state while waiting. Always handle nil status gracefully.
 
-**Testing with real gt**: Run mg from a Gas Town workspace (e.g., `cd ~/gt/<rig>/crew/<name> && ~/Work/mardi-gras/mg`). The `gt` source code is at `~/go/pkg/mod/github.com/steveyegge/gastown@v0.7.0/` — check it directly rather than guessing struct shapes. Rig names cannot contain hyphens (use underscores).
+**Testing with real gt**: Run mg from a Gas Town workspace (e.g., `cd ~/gt/<rig>/crew/<name> && ~/Work/mardi-gras/mg`). The `gt` source code is at `~/go/pkg/mod/github.com/steveyegge/gastown@v0.8.0/` — check it directly rather than guessing struct shapes. Rig names cannot contain hyphens (use underscores).
 
 ## Agent Dispatch
 

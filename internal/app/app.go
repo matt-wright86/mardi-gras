@@ -1498,7 +1498,12 @@ func (m Model) quickAction(status data.Status, label string) (tea.Model, tea.Cmd
 	}
 	issueID := issue.ID
 	return m, func() tea.Msg {
-		err := data.SetStatus(issueID, status)
+		var err error
+		if status == data.StatusInProgress {
+			err = data.ClaimIssue(issueID)
+		} else {
+			err = data.SetStatus(issueID, status)
+		}
 		return mutateResultMsg{issueID: issueID, action: label, err: err}
 	}
 }

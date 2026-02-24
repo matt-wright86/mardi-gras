@@ -54,10 +54,14 @@ var (
 	Silver = lipgloss.Color("#AAAAAA")
 
 	// Gas Town role colors
-	RoleMayor   = BrightGold
-	RolePolecat = BrightGreen
-	RoleCrew    = BrightPurple
-	RoleDefault = Silver
+	RoleMayor    = BrightGold
+	RoleDeacon   = lipgloss.Color("#3498DB") // Blue — town health monitor
+	RolePolecat  = BrightGreen
+	RoleCrew     = BrightPurple
+	RoleWitness  = lipgloss.Color("#E67E22") // Orange — rig reviewer
+	RoleRefinery = lipgloss.Color("#1ABC9C") // Teal — merge processor
+	RoleDog      = lipgloss.Color("#8E44AD") // Deep purple — infrastructure worker
+	RoleDefault  = Silver
 
 	// Gas Town agent state colors
 	StateWorking = BrightGreen
@@ -99,12 +103,20 @@ func PriorityColor(p int) lipgloss.Color {
 // RoleColor returns the theme color for a Gas Town agent role.
 func RoleColor(role string) lipgloss.Color {
 	switch role {
-	case "mayor":
+	case "mayor", "coordinator":
 		return RoleMayor
+	case "deacon", "health-check":
+		return RoleDeacon
 	case "polecat":
 		return RolePolecat
 	case "crew":
 		return RoleCrew
+	case "witness":
+		return RoleWitness
+	case "refinery":
+		return RoleRefinery
+	case "dog":
+		return RoleDog
 	default:
 		return RoleDefault
 	}

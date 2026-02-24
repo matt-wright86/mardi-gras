@@ -22,7 +22,8 @@ internal/
     watcher.go            File polling (1.2s interval, change detection)
     source.go             Data source abstraction (JSONL vs CLI), bd list fetcher
     focus.go              Focus mode filtering (my work + top priority)
-    mutate.go             Issue mutations via bd CLI (status, priority, create)
+    mutate.go             Issue mutations via bd CLI (status, priority, create, claim)
+    exec.go               Timeout helpers for bd/git commands (short/medium tiers)
     crossrig.go           Cross-rig dependency detection and rendering
     hop.go                HOP (Hierarchy of Proof) quality score types
 
@@ -47,6 +48,7 @@ internal/
 
   gastown/
     detect.go             Environment detection (GT_ROLE, GT_RIG, gt on PATH)
+    exec.go               Timeout helpers for gt commands (short/medium/long tiers)
     status.go             gt status --json parsing, TownStatus/AgentRuntime types
     sling.go              Issue dispatch: sling, unsling, multi-sling, nudge
     convoy.go             Convoy CRUD: list, create, land, close
@@ -177,7 +179,7 @@ type Model struct {
 
 **Init()** starts two concurrent commands:
 - `m.startPoll()` — JSONL mode: `data.WatchFile(path, lastMod)` polls every 1.2s; CLI mode: `data.PollCLI()` runs `bd list --json` every 5s
-- `pollAgentState(gtEnv, inTmux)` — queries tmux or `gt status --json` for agent state
+- Agent state poll — queries tmux or `gt status --json`. Uses a single-flight gate (`gtPollInFlight`) to prevent overlapping `gt status` calls (which take ~9s). Init bypasses the gate for the first poll; subsequent calls from watcher and user actions go through `gatedPollAgentState()`.
 
 **Update(msg)** routes messages. The full message set:
 
@@ -351,7 +353,7 @@ On `FileChangedMsg`, the app reloads issues, rebuilds parade groups, diffs again
 
 ## Gas Town Integration
 
-The `internal/gastown` package handles all Gas Town interaction. It has no internal dependencies — only stdlib and `encoding/json`.
+The `internal/gastown` package handles all Gas Town interaction. Core files (status, sling, convoy, mail, molecule, problems, detect) have no internal dependencies — only stdlib and `encoding/json`. Analytics files (velocity, predict, scorecard, recommend) import `internal/data` for issue types.
 
 ### Environment Detection (detect.go)
 
@@ -483,7 +485,7 @@ Additional agent operations from the Gas Town panel:
 
 All visual constants live in `internal/ui/`:
 
-- **theme.go** — Color palette (Mardi Gras purple, gold, green), plus `RoleColor()` for Gas Town agent roles and `AgentStateColor()` for working/idle/backoff states
+- **theme.go** — Color palette (Mardi Gras purple, gold, green), plus `RoleColor()` for all 7 Gas Town agent roles (mayor/coordinator, deacon/health-check, polecat, crew, witness, refinery, dog) and `AgentStateColor()` for working/idle/backoff/stuck/spawning/gate/paused states
 - **styles.go** — Pre-built lipgloss styles for every context: parade items, detail sections, Gas Town panel, DAG connectors, toast notifications, command palette
 - **symbols.go** — Unicode symbols: status indicators (●, ♪, ⊘, ✓), dependency arrows, DAG flow connectors (│, ┌, ├, └), progress bars
 - **hop.go** — HOP badge rendering (star ratings, crystal/ephemeral indicators)
@@ -554,7 +556,7 @@ Direct MySQL connection to the Dolt SQL server for sub-second polling, increment
 
 ### Multi-Runtime Agent Dispatch
 
-`agent/launch.go` currently hardcodes Claude Code. Gas Town v0.7.0 supports multiple runtimes: Gemini CLI, Copilot CLI, OpenCode. Adapting mg requires runtime detection from `AgentRuntime` metadata, per-sling runtime selection in the formula picker, and adapted prompt formatting per runtime.
+`agent/launch.go` currently hardcodes Claude Code. Gas Town v0.8.0 supports multiple runtimes: Gemini CLI, Copilot CLI, OpenCode. Adapting mg requires runtime detection from `AgentRuntime` metadata, per-sling runtime selection in the formula picker, and adapted prompt formatting per runtime.
 
 ### Gas Town Status Latency
 

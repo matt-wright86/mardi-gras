@@ -10,6 +10,12 @@ func SetStatus(issueID string, status Status) error {
 	return execWithTimeout(timeoutShort, "bd", "update", issueID, "--status="+string(status))
 }
 
+// ClaimIssue runs `bd update <id> --claim` to atomically set assignee and status to in_progress.
+// Fails if the issue is already claimed by another agent, preventing races in multi-agent workflows.
+func ClaimIssue(issueID string) error {
+	return execWithTimeout(timeoutShort, "bd", "update", issueID, "--claim")
+}
+
 // CloseIssue runs `bd close <id>` to close an issue.
 func CloseIssue(issueID string) error {
 	return execWithTimeout(timeoutShort, "bd", "close", issueID)
