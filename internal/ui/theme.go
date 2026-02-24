@@ -63,6 +63,9 @@ var (
 	StateWorking = BrightGreen
 	StateIdle    = Silver
 	StateBackoff = lipgloss.Color("#E74C3C")
+	StateStuck   = lipgloss.Color("#FF8C00") // Amber — agent requesting help
+	StateSpawn   = lipgloss.Color("#3498DB") // Cyan — session starting
+	StateGate    = BrightGold                // Waiting on external trigger
 
 	// HOP quality colors
 	QualityExcellent = BrightGold   // 0.9+
@@ -112,8 +115,16 @@ func AgentStateColor(state string) lipgloss.Color {
 	switch state {
 	case "working":
 		return StateWorking
-	case "backoff":
+	case "spawning":
+		return StateSpawn
+	case "backoff", "degraded":
 		return StateBackoff
+	case "stuck":
+		return StateStuck
+	case "awaiting-gate":
+		return StateGate
+	case "paused", "muted":
+		return Dim
 	default:
 		return StateIdle
 	}

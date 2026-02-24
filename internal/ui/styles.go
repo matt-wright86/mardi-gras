@@ -295,8 +295,16 @@ func StateBadge(state string) string {
 	switch state {
 	case "working":
 		sym = SymWorking
-	case "backoff":
+	case "spawning":
+		sym = SymSpawning
+	case "backoff", "degraded":
 		sym = SymBackoff
+	case "stuck":
+		sym = SymStuck
+	case "awaiting-gate":
+		sym = SymGate
+	case "paused", "muted":
+		sym = SymPaused
 	}
 	return lipgloss.NewStyle().
 		Foreground(AgentStateColor(state)).
