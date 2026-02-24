@@ -187,18 +187,21 @@ func TestNewConfettiActive(t *testing.T) {
 	if !c.Active() {
 		t.Error("expected new confetti to be active")
 	}
-	if len(c.particles) != 35 {
-		t.Errorf("expected 35 particles, got %d", len(c.particles))
+	if len(c.particles) != confettiParticles {
+		t.Errorf("expected %d particles, got %d", confettiParticles, len(c.particles))
+	}
+	if len(c.necklaces) != necklaceCount {
+		t.Errorf("expected %d necklaces, got %d", necklaceCount, len(c.necklaces))
 	}
 }
 
 func TestConfettiDeactivatesAfterFrames(t *testing.T) {
 	c := NewConfetti(80, 20)
-	for i := 0; i < 18; i++ {
+	for i := 0; i < confettiFrames; i++ {
 		c.Update()
 	}
 	if c.Active() {
-		t.Error("expected confetti to be inactive after 18 updates")
+		t.Errorf("expected confetti to be inactive after %d updates", confettiFrames)
 	}
 }
 

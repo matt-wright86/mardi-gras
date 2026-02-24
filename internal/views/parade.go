@@ -56,8 +56,9 @@ type Parade struct {
 	SelectedIssue *data.Issue
 	ActiveAgents  map[string]string // issueID -> tmux window name
 	TownStatus    *gastown.TownStatus
-	ChangedIDs    map[string]bool // recently changed issues (change indicator dot)
-	Selected      map[string]bool // multi-selected issue IDs
+	ChangedIDs      map[string]bool  // recently changed issues (change indicator dot)
+	Selected        map[string]bool  // multi-selected issue IDs
+	MatchHighlights map[string][]int // issueID -> matched char indices in title (fuzzy search)
 }
 
 // NewParade creates a parade view from a set of issues.
@@ -487,10 +488,16 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 	}
 	title := truncate(issue.Title, maxTitle)
 
-	// Apply dim styling to deferred issue titles
-	titleStyle := lipgloss.NewStyle()
-	if issue.IsDeferred() {
-		titleStyle = ui.DeferredStyle
+	// Apply dim styling to deferred issue titles, or highlight fuzzy matches
+	var renderedTitle string
+	if indices, ok := p.MatchHighlights[issue.ID]; ok && len(indices) > 0 {
+		renderedTitle = ui.HighlightMatches(title, indices, maxTitle)
+	} else {
+		titleStyle := lipgloss.NewStyle()
+		if issue.IsDeferred() {
+			titleStyle = ui.DeferredStyle
+		}
+		renderedTitle = titleStyle.Render(title)
 	}
 
 	line := fmt.Sprintf("%s%s %s%s%s%s %s %s",
@@ -500,7 +507,7 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 		changePrefix,
 		agentPrefix,
 		issue.ID,
-		titleStyle.Render(title),
+		renderedTitle,
 		prioStyle.Render(prio),
 	)
 	line += qualityBadge + dueBadge + deferBadge + hint

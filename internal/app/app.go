@@ -120,6 +120,9 @@ type Model struct {
 
 	// Gas Town panel liveness tick
 	gasTownTicking bool
+
+	// Bead string shimmer animation
+	beadOffset int
 }
 
 // New creates a new app model from loaded issues.
@@ -185,6 +188,7 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.startPoll(),
 		agentPoll,
+		headerShimmerCmd(),
 	)
 }
 
@@ -350,6 +354,9 @@ type changeIndicatorExpiredMsg struct{}
 
 // gasTownTickMsg drives liveness animations (breathing dots, duration timers).
 type gasTownTickMsg struct{}
+
+// headerShimmerMsg drives the bead string shimmer animation.
+type headerShimmerMsg struct{}
 
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -1037,6 +1044,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.gasTownTicking = false
 		return m, nil
+
+	case headerShimmerMsg:
+		m.beadOffset++
+		return m, headerShimmerCmd()
 
 	case components.ToastDismissMsg:
 		m.toast = components.Toast{}
@@ -1965,6 +1976,7 @@ func (m *Model) layout() {
 		TownStatus:       m.townStatus,
 		GasTownAvailable: m.gtEnv.Available,
 		ProblemCount:     len(gastown.DetectProblems(m.townStatus)),
+		BeadOffset:       m.beadOffset,
 	}
 
 	m.parade.SetSize(paradeW, bodyH)
@@ -2004,7 +2016,7 @@ func (m *Model) rebuildParade() {
 		bodyH = m.height - 4
 	}
 
-	filteredIssues := data.FilterIssues(m.issues, m.filterInput.Value())
+	filteredIssues, highlights := data.FilterIssuesWithHighlights(m.issues, m.filterInput.Value())
 	if m.focusMode {
 		filteredIssues = data.FocusFilter(filteredIssues, m.blockingTypes)
 	}
@@ -2020,9 +2032,11 @@ func (m *Model) rebuildParade() {
 		TownStatus:       m.townStatus,
 		GasTownAvailable: m.gtEnv.Available,
 		ProblemCount:     len(gastown.DetectProblems(m.townStatus)),
+		BeadOffset:       m.beadOffset,
 	}
 
 	m.parade = views.NewParade(filteredIssues, paradeW, bodyH, m.blockingTypes)
+	m.parade.MatchHighlights = highlights
 	if oldShowClosed {
 		m.parade.ToggleClosed()
 	}
@@ -2119,6 +2133,14 @@ func (m *Model) gatedPollAgentState() tea.Cmd {
 }
 
 const gasTownTickInterval = 1 * time.Second
+const headerShimmerInterval = 500 * time.Millisecond
+
+// headerShimmerCmd returns a Cmd that fires a headerShimmerMsg for bead animation.
+func headerShimmerCmd() tea.Cmd {
+	return tea.Tick(headerShimmerInterval, func(time.Time) tea.Msg {
+		return headerShimmerMsg{}
+	})
+}
 
 // gasTownTickCmd returns a Cmd that fires a gasTownTickMsg after the interval.
 func gasTownTickCmd() tea.Cmd {

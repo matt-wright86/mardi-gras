@@ -345,3 +345,30 @@ func SectionDivider(title string, width int, focused bool) string {
 		titleStyle.Render(title) + " " +
 		ruleStyle.Render(trail)
 }
+
+// HighlightMatches renders a string with matched character positions highlighted.
+// Matched characters are rendered in bright gold bold; others use default style.
+func HighlightMatches(text string, indices []int, maxLen int) string {
+	runes := []rune(text)
+	if maxLen > 0 && len(runes) > maxLen {
+		runes = runes[:maxLen]
+	}
+
+	matchSet := make(map[int]bool, len(indices))
+	for _, idx := range indices {
+		matchSet[idx] = true
+	}
+
+	matchStyle := lipgloss.NewStyle().Foreground(BrightGold).Bold(true).Underline(true)
+	normalStyle := lipgloss.NewStyle()
+
+	var b strings.Builder
+	for i, r := range runes {
+		if matchSet[i] {
+			b.WriteString(matchStyle.Render(string(r)))
+		} else {
+			b.WriteString(normalStyle.Render(string(r)))
+		}
+	}
+	return b.String()
+}

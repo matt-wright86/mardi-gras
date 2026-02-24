@@ -133,3 +133,70 @@ func fuzzyFilter(issues []Issue, query string) []Issue {
 	}
 	return result
 }
+
+// FilterIssuesWithHighlights returns filtered issues plus a map of issue ID → matched
+// character indices in the "ID + Title" search string. Used for rendering highlights.
+func FilterIssuesWithHighlights(issues []Issue, query string) ([]Issue, map[string][]int) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return issues, nil
+	}
+
+	rawTokens := strings.Fields(query)
+	var structuredTokens []string
+	var freeTokens []string
+
+	for _, t := range rawTokens {
+		lower := strings.ToLower(t)
+		if isStructuredToken(lower) {
+			structuredTokens = append(structuredTokens, lower)
+		} else {
+			freeTokens = append(freeTokens, lower)
+		}
+	}
+
+	candidates := issues
+	if len(structuredTokens) > 0 {
+		var filtered []Issue
+		for _, issue := range candidates {
+			if matchesStructuredTokens(issue, structuredTokens) {
+				filtered = append(filtered, issue)
+			}
+		}
+		candidates = filtered
+	}
+
+	if len(freeTokens) == 0 {
+		return candidates, nil
+	}
+
+	freeQuery := strings.Join(freeTokens, " ")
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+
+	src := issueSearchSource{issues: candidates}
+	matches := fuzzy.FindFrom(freeQuery, src)
+
+	result := make([]Issue, 0, len(matches))
+	highlights := make(map[string][]int)
+	for _, match := range matches {
+		issue := candidates[match.Index]
+		result = append(result, issue)
+		if len(match.MatchedIndexes) > 0 {
+			// Convert from "ID Title" string indices to title-only indices
+			idPrefixLen := len(issue.ID) + 1 // "ID " prefix
+			var titleIndices []int
+			for _, idx := range match.MatchedIndexes {
+				titleIdx := idx - idPrefixLen
+				if titleIdx >= 0 && titleIdx < len([]rune(issue.Title)) {
+					titleIndices = append(titleIndices, titleIdx)
+				}
+			}
+			if len(titleIndices) > 0 {
+				highlights[issue.ID] = titleIndices
+			}
+		}
+	}
+	return result, highlights
+}
