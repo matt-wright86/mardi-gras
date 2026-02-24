@@ -452,7 +452,7 @@ func TestGateStatusRendering(t *testing.T) {
 	d := NewDetail(80, 40, issues)
 	d.TownStatus = &gastown.TownStatus{
 		Agents: []gastown.AgentRuntime{
-			{Name: "Toast", Role: "polecat", State: "awaiting-gate", HookBead: "mg-001", Running: true},
+			{Name: "Toast", Role: "polecat", State: "awaiting-gate", HookBead: "mg-001"},
 		},
 	}
 	d.ActiveAgents = map[string]string{"mg-001": "Toast"}
@@ -480,7 +480,7 @@ func TestGateStatusNotShownWhenWorking(t *testing.T) {
 	d := NewDetail(80, 40, issues)
 	d.TownStatus = &gastown.TownStatus{
 		Agents: []gastown.AgentRuntime{
-			{Name: "Toast", Role: "polecat", State: "working", HookBead: "mg-001", Running: true},
+			{Name: "Toast", Role: "polecat", State: "working", HookBead: "mg-001"},
 		},
 	}
 	d.SetIssue(&issues[0])

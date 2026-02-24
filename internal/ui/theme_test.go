@@ -57,6 +57,64 @@ func TestIssueTypeColor(t *testing.T) {
 	}
 }
 
+func TestAgentStateColor(t *testing.T) {
+	tests := []struct {
+		name  string
+		state string
+		want  lipgloss.Color
+	}{
+		{"working", "working", StateWorking},
+		{"spawning", "spawning", StateSpawn},
+		{"idle", "idle", StateIdle},
+		{"backoff", "backoff", StateBackoff},
+		{"degraded maps to backoff", "degraded", StateBackoff},
+		{"stuck", "stuck", StateStuck},
+		{"awaiting-gate", "awaiting-gate", StateGate},
+		{"paused", "paused", Dim},
+		{"muted", "muted", Dim},
+		{"unknown falls back to idle", "unknown", StateIdle},
+		{"empty falls back to idle", "", StateIdle},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := AgentStateColor(tt.state)
+			if got != tt.want {
+				t.Errorf("AgentStateColor(%q) = %v, want %v", tt.state, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAgentStateColorDistinctCategories(t *testing.T) {
+	// Each state category should map to a distinct color
+	colors := map[string]lipgloss.Color{
+		"working":       AgentStateColor("working"),
+		"spawning":      AgentStateColor("spawning"),
+		"idle":          AgentStateColor("idle"),
+		"backoff":       AgentStateColor("backoff"),
+		"stuck":         AgentStateColor("stuck"),
+		"awaiting-gate": AgentStateColor("awaiting-gate"),
+		"paused":        AgentStateColor("paused"),
+	}
+
+	// Verify distinct colors across categories (some share intentionally)
+	pairs := [][2]string{
+		{"working", "idle"},
+		{"working", "backoff"},
+		{"working", "stuck"},
+		{"idle", "backoff"},
+		{"idle", "stuck"},
+		{"stuck", "backoff"},
+		{"spawning", "idle"},
+	}
+	for _, pair := range pairs {
+		if colors[pair[0]] == colors[pair[1]] {
+			t.Errorf("AgentStateColor(%q) == AgentStateColor(%q), should be distinct", pair[0], pair[1])
+		}
+	}
+}
+
 func TestApplyMardiGrasGradientEmpty(t *testing.T) {
 	result := ApplyMardiGrasGradient("")
 	if result != "" {

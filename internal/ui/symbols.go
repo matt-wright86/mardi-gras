@@ -63,6 +63,10 @@ const (
 	SymIdle          = "○"
 	SymWorking       = "●"
 	SymBackoff       = "◌"
+	SymStuck         = "⚠"  // alias of SymWarning — agent requesting help
+	SymSpawning      = "◐"  // half-filled — session starting
+	SymGate          = "◷"  // alias of SymDueDate — waiting on gate
+	SymPaused        = "⏸"  // alias of SymDeferred — intentionally suspended
 	SymProgress      = "█"
 	SymProgressEmpty = "░"
 	SymTown          = "⛽"

@@ -16,11 +16,10 @@ type TownStatus struct {
 
 // AgentRuntime represents a single Gas Town agent.
 type AgentRuntime struct {
-	Name      string `json:"name"`
-	Role      string `json:"role"`
-	Rig       string `json:"rig"`
-	Running   bool   `json:"running"`
-	HasWork   bool   `json:"has_work"`
+	Name    string `json:"name"`
+	Role    string `json:"role"`
+	Rig     string `json:"rig"`
+	HasWork bool   `json:"has_work"`
 	WorkTitle string `json:"work_title"`
 	HookBead  string `json:"hook_bead"`
 	State     string `json:"state"`
@@ -125,11 +124,7 @@ func normalizeStatus(raw *rawTownStatus) *TownStatus {
 		for _, a := range rig.Agents {
 			a.Rig = rig.Name
 			if a.State == "" {
-				if a.Running {
-					a.State = "working"
-				} else {
-					a.State = "idle"
-				}
+				a.State = "idle"
 			}
 			// Enrich from hook data
 			if h, ok := hookMap[a.Address]; ok {
@@ -169,7 +164,7 @@ func (s *TownStatus) ActiveAgentMap() map[string]string {
 		return m
 	}
 	for _, a := range s.Agents {
-		if a.HookBead != "" && a.Running {
+		if a.HookBead != "" && a.State != "idle" && a.State != "" {
 			m[a.HookBead] = a.Name
 		}
 	}
@@ -183,7 +178,7 @@ func (s *TownStatus) WorkingCount() int {
 		return n
 	}
 	for _, a := range s.Agents {
-		if a.HasWork && a.Running {
+		if a.State == "working" || a.State == "spawning" {
 			n++
 		}
 	}

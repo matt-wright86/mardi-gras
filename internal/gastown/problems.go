@@ -18,12 +18,22 @@ func DetectProblems(status *TownStatus) []Problem {
 	var problems []Problem
 	for _, a := range status.Agents {
 		// Stalled: agent is running, has work, but idle (should be working)
-		if a.Running && a.HasWork && a.State == "idle" {
+		if a.HasWork && a.State == "idle" {
 			problems = append(problems, Problem{
 				Type:     "stalled",
 				Agent:    a,
 				Detail:   "Has work but idle — may need nudge",
 				Severity: "warn",
+			})
+		}
+
+		// Stuck: agent explicitly requesting help
+		if a.State == "stuck" {
+			problems = append(problems, Problem{
+				Type:     "stuck",
+				Agent:    a,
+				Detail:   "Agent is stuck and requesting help",
+				Severity: "error",
 			})
 		}
 
@@ -38,7 +48,7 @@ func DetectProblems(status *TownStatus) []Problem {
 		}
 
 		// Zombie: agent not running but has hooked work
-		if !a.Running && a.HookBead != "" {
+		if a.State == "" && a.HookBead != "" {
 			problems = append(problems, Problem{
 				Type:     "zombie",
 				Agent:    a,

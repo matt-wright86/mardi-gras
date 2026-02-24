@@ -33,7 +33,7 @@ func TestGasTownSetStatus(t *testing.T) {
 	g := NewGasTown(80, 24)
 	status := &gastown.TownStatus{
 		Agents: []gastown.AgentRuntime{
-			{Name: "polecat-1", Role: "polecat", State: "working", Running: true, HasWork: true, WorkTitle: "Fix bug"},
+			{Name: "polecat-1", Role: "polecat", State: "working", HasWork: true, WorkTitle: "Fix bug"},
 		},
 	}
 	env := gastown.Env{Available: true, Role: "mayor", Rig: "test-rig"}
@@ -71,8 +71,8 @@ func TestGasTownViewWithAgents(t *testing.T) {
 	g := NewGasTown(100, 30)
 	status := &gastown.TownStatus{
 		Agents: []gastown.AgentRuntime{
-			{Name: "polecat-1", Role: "polecat", State: "working", Running: true, HasWork: true, WorkTitle: "Fix the login bug"},
-			{Name: "crew-alpha", Role: "crew", State: "idle", Running: true},
+			{Name: "polecat-1", Role: "polecat", State: "working", HasWork: true, WorkTitle: "Fix the login bug"},
+			{Name: "crew-alpha", Role: "crew", State: "idle"},
 		},
 	}
 	env := gastown.Env{Available: true, Role: "mayor", Rig: "my-project"}

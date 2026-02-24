@@ -28,7 +28,7 @@
 - Gas Town features activate progressively: Beads-only (no `gt`) -> Gas Town available (`gt` on PATH) -> Inside Gas Town (`GT_ROLE` env var set). Every feature must work or hide gracefully at each level.
 - `gt status --json` takes ~9 seconds. Always run as a BubbleTea `Cmd` (background goroutine), never blocking Update. Handle `nil` status gracefully — the user may interact before the command returns.
 - The JSON nests agents under `rigs[].agents`. `normalizeStatus()` in `gastown/status.go` flattens them. Top-level agents are HQ-level (mayor, deacon); rig agents include polecats, crew, witness, refinery.
-- If `AgentRuntime.State` is empty, infer from `Running`: true -> "working", false -> "idle".
+- If `AgentRuntime.State` is empty, default to "idle". Gas Town v0.8.0+ always provides State.
 - Gas Town rig names cannot contain hyphens (use underscores).
 - Crew workspaces have `.beads/redirect` not `issues.jsonl` — mg walks up the directory tree to find the actual data file.
 - The `gastown` package has no internal dependencies (stdlib + `encoding/json` only). Keep it that way.

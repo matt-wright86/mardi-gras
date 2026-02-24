@@ -202,7 +202,7 @@ func (d *Detail) renderContent() string {
 						fmt.Sprintf("%s %s (%s)", ui.SymAgent, a.Name, a.Role),
 					)))
 					if a.State != "" {
-						lines = append(lines, d.row("State:", ui.DetailValue.Render(a.State)))
+						lines = append(lines, d.row("State:", ui.StateBadge(a.State)))
 					}
 				} else {
 					lines = append(lines, d.row("Agent:", agentStyle.Render(

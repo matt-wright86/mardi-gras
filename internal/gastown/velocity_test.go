@@ -26,11 +26,11 @@ func TestVelocityMetrics(t *testing.T) {
 
 	status := &TownStatus{
 		Agents: []AgentRuntime{
-			{Name: "a1", Running: true, HasWork: true},
-			{Name: "a2", Running: true, HasWork: true},
-			{Name: "a3", Running: true, HasWork: false},
-			{Name: "a4", Running: false},
-			{Name: "a5", Running: false},
+			{Name: "a1", State: "working", HasWork: true},
+			{Name: "a2", State: "working", HasWork: true},
+			{Name: "a3", State: "idle", HasWork: false},
+			{Name: "a4", State: "idle"},
+			{Name: "a5", State: "idle"},
 		},
 	}
 

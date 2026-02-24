@@ -583,8 +583,16 @@ func (g *GasTown) renderAgentRoster(width int) string {
 		switch a.State {
 		case "working":
 			stateSym = ui.SymWorking
-		case "backoff":
+		case "spawning":
+			stateSym = ui.SymSpawning
+		case "backoff", "degraded":
 			stateSym = ui.SymBackoff
+		case "stuck":
+			stateSym = ui.SymStuck
+		case "awaiting-gate":
+			stateSym = ui.SymGate
+		case "paused", "muted":
+			stateSym = ui.SymPaused
 		}
 		stateStyle := lipgloss.NewStyle().Foreground(ui.AgentStateColor(a.State))
 		stateStr := stateStyle.Render(fmt.Sprintf("%-*s", stateW, stateSym+" "+a.State))
