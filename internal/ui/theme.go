@@ -72,13 +72,13 @@ var (
 	StateGate    = BrightGold                // Waiting on external trigger
 
 	// HOP quality colors
-	QualityExcellent = BrightGold   // 0.9+
-	QualityGood      = BrightGreen  // 0.7+
-	QualityFair      = Silver       // 0.5+
+	QualityExcellent = BrightGold                // 0.9+
+	QualityGood      = BrightGreen               // 0.7+
+	QualityFair      = Silver                    // 0.5+
 	QualityPoor      = lipgloss.Color("#E74C3C") // 0.3+
-	QualityLow       = Dim          // below 0.3
-	CrystalColor     = BrightPurple // crystallizing work
-	EphemeralColor   = Dim          // ephemeral work
+	QualityLow       = Dim                       // below 0.3
+	CrystalColor     = BrightPurple              // crystallizing work
+	EphemeralColor   = Dim                       // ephemeral work
 )
 
 // PriorityColor returns the theme color for a priority level.

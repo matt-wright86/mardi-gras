@@ -14,8 +14,8 @@ const (
 	confettiParticles = 20
 	confettiFrames    = 22
 	confettiInterval  = 50 * time.Millisecond
-	necklaceCount     = 5  // number of bead necklaces
-	necklaceLength    = 5  // beads per necklace
+	necklaceCount     = 5 // number of bead necklaces
+	necklaceLength    = 5 // beads per necklace
 )
 
 var confettiGlyphs = []string{"●", "◆", "⚜", "✦", "✧", "★", "♦"}
@@ -34,10 +34,10 @@ type particle struct {
 
 // necklace is a vertical chain of connected beads that falls together.
 type necklace struct {
-	x      float64         // horizontal position
-	y      float64         // top bead position
-	vy     float64         // vertical velocity
-	vx     float64         // slight horizontal sway
+	x      float64          // horizontal position
+	y      float64          // top bead position
+	vy     float64          // vertical velocity
+	vx     float64          // slight horizontal sway
 	beads  []lipgloss.Color // color per bead
 	glyphs []string         // glyph per bead
 }
@@ -45,12 +45,12 @@ type necklace struct {
 // Confetti is a particle animation triggered on issue close.
 // Combines scattered particles with falling bead necklaces.
 type Confetti struct {
-	particles  []particle
-	necklaces  []necklace
-	frame      int
-	width      int
-	height     int
-	active     bool
+	particles []particle
+	necklaces []necklace
+	frame     int
+	width     int
+	height    int
+	active    bool
 }
 
 // confettiTickMsg advances the animation one frame.
@@ -97,12 +97,12 @@ func NewConfetti(width, height int) Confetti {
 	}
 
 	return Confetti{
-		particles:  particles,
-		necklaces:  necklaces,
-		frame:      0,
-		width:      width,
-		height:     height,
-		active:     true,
+		particles: particles,
+		necklaces: necklaces,
+		frame:     0,
+		width:     width,
+		height:    height,
+		active:    true,
 	}
 }
 
@@ -132,7 +132,7 @@ func (c *Confetti) Update() {
 		c.particles[i].x += c.particles[i].vx
 		c.particles[i].y += c.particles[i].vy
 		c.particles[i].vy += gravity // gravity pulls down
-		c.particles[i].vx *= 0.95   // slow horizontal movement
+		c.particles[i].vx *= 0.95    // slow horizontal movement
 	}
 
 	// Update necklaces: gentle fall with slight sway

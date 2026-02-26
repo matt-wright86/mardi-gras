@@ -90,7 +90,7 @@ func TestGasTownViewWithAgents(t *testing.T) {
 func TestGasTownViewWithConvoys(t *testing.T) {
 	g := NewGasTown(100, 30)
 	status := &gastown.TownStatus{
-		Agents:  []gastown.AgentRuntime{},
+		Agents: []gastown.AgentRuntime{},
 		Convoys: []gastown.ConvoyInfo{
 			{ID: "conv-1", Title: "Sprint delivery", Status: "active", Done: 3, Total: 10},
 		},

@@ -76,8 +76,8 @@ func TestTownStatusActiveAgentMap(t *testing.T) {
 	status := &TownStatus{
 		Agents: []AgentRuntime{
 			{Name: "Toast", HookBead: "bd-a1b2", State: "working"},
-			{Name: "Muffin", HookBead: "", State: "working"},      // no hook
-			{Name: "Stale", HookBead: "bd-e5f6", State: "idle"},   // idle
+			{Name: "Muffin", HookBead: "", State: "working"},    // no hook
+			{Name: "Stale", HookBead: "bd-e5f6", State: "idle"}, // idle
 		},
 	}
 	m := status.ActiveAgentMap()

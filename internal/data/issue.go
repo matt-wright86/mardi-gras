@@ -89,26 +89,26 @@ type DepEval struct {
 
 // Issue represents a single Beads issue.
 type Issue struct {
-	ID                 string       `json:"id"`
-	Title              string       `json:"title"`
-	Description        string       `json:"description,omitempty"`
-	Status             Status       `json:"status"`
-	Priority           Priority     `json:"priority"`
-	IssueType          IssueType    `json:"issue_type"`
-	Owner              string       `json:"owner,omitempty"`
-	Assignee           string       `json:"assignee,omitempty"`
-	CreatedAt          time.Time    `json:"created_at"`
-	CreatedBy          string       `json:"created_by,omitempty"`
-	UpdatedAt          time.Time    `json:"updated_at"`
-	ClosedAt           *time.Time   `json:"closed_at,omitempty"`
-	CloseReason        string       `json:"close_reason,omitempty"`
-	Dependencies       []Dependency `json:"dependencies,omitempty"`
-	Notes              string       `json:"notes,omitempty"`
-	Design             string       `json:"design,omitempty"`
-	AcceptanceCriteria string       `json:"acceptance_criteria,omitempty"`
-	Labels             []string     `json:"labels,omitempty"`
-	DueAt              *time.Time   `json:"due_at,omitempty"`
-	DeferUntil         *time.Time   `json:"defer_until,omitempty"`
+	ID                 string                 `json:"id"`
+	Title              string                 `json:"title"`
+	Description        string                 `json:"description,omitempty"`
+	Status             Status                 `json:"status"`
+	Priority           Priority               `json:"priority"`
+	IssueType          IssueType              `json:"issue_type"`
+	Owner              string                 `json:"owner,omitempty"`
+	Assignee           string                 `json:"assignee,omitempty"`
+	CreatedAt          time.Time              `json:"created_at"`
+	CreatedBy          string                 `json:"created_by,omitempty"`
+	UpdatedAt          time.Time              `json:"updated_at"`
+	ClosedAt           *time.Time             `json:"closed_at,omitempty"`
+	CloseReason        string                 `json:"close_reason,omitempty"`
+	Dependencies       []Dependency           `json:"dependencies,omitempty"`
+	Notes              string                 `json:"notes,omitempty"`
+	Design             string                 `json:"design,omitempty"`
+	AcceptanceCriteria string                 `json:"acceptance_criteria,omitempty"`
+	Labels             []string               `json:"labels,omitempty"`
+	DueAt              *time.Time             `json:"due_at,omitempty"`
+	DeferUntil         *time.Time             `json:"defer_until,omitempty"`
 	Metadata           map[string]interface{} `json:"metadata,omitempty"`
 
 	// HOP (Hierarchy of Proof) — agent reputation and quality tracking.

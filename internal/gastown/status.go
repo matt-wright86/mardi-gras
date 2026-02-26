@@ -28,9 +28,9 @@ type AgentRuntime struct {
 	Session   string `json:"session"`
 
 	// Agent display metadata (populated by gt's resolveAgentDisplay).
-	AgentInfo    string `json:"agent_info,omitempty"`     // runtime/model, e.g. "claude/opus"
-	AgentAlias   string `json:"agent_alias,omitempty"`    // short name, e.g. "opus-46"
-	FirstSubject string `json:"first_subject,omitempty"`  // first unread mail subject
+	AgentInfo    string `json:"agent_info,omitempty"`    // runtime/model, e.g. "claude/opus"
+	AgentAlias   string `json:"agent_alias,omitempty"`   // short name, e.g. "opus-46"
+	FirstSubject string `json:"first_subject,omitempty"` // first unread mail subject
 }
 
 // RigStatus represents a Gas Town rig (project).
@@ -63,10 +63,10 @@ type ConvoyInfo struct {
 
 // rawTownStatus matches the actual `gt status --json` output shape.
 type rawTownStatus struct {
-	Name    string          `json:"name"`
-	Agents  []AgentRuntime  `json:"agents"`
-	Rigs    []rawRigStatus  `json:"rigs"`
-	Convoys []ConvoyInfo    `json:"convoys"`
+	Name    string         `json:"name"`
+	Agents  []AgentRuntime `json:"agents"`
+	Rigs    []rawRigStatus `json:"rigs"`
+	Convoys []ConvoyInfo   `json:"convoys"`
 }
 
 type rawRigStatus struct {

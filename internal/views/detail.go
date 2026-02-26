@@ -16,22 +16,22 @@ import (
 
 // Detail renders the right-panel issue details with a scrollable viewport.
 type Detail struct {
-	Issue              *data.Issue
-	AllIssues          []data.Issue
-	IssueMap           map[string]*data.Issue
-	BlockingTypes      map[string]bool
-	Viewport           viewport.Model
-	Width              int
-	Height             int
-	Focused            bool
-	ActiveAgents       map[string]string
-	TownStatus         *gastown.TownStatus
-	MoleculeDAG        *gastown.DAGInfo
-	MoleculeProgress   *gastown.MoleculeProgress
-	MoleculeIssueID    string // which issue the molecule data belongs to
-	Comments           []gastown.Comment
-	CommentsIssueID    string // which issue the comments belong to
-	MetadataSchema     *data.MetadataSchema
+	Issue            *data.Issue
+	AllIssues        []data.Issue
+	IssueMap         map[string]*data.Issue
+	BlockingTypes    map[string]bool
+	Viewport         viewport.Model
+	Width            int
+	Height           int
+	Focused          bool
+	ActiveAgents     map[string]string
+	TownStatus       *gastown.TownStatus
+	MoleculeDAG      *gastown.DAGInfo
+	MoleculeProgress *gastown.MoleculeProgress
+	MoleculeIssueID  string // which issue the molecule data belongs to
+	Comments         []gastown.Comment
+	CommentsIssueID  string // which issue the comments belong to
+	MetadataSchema   *data.MetadataSchema
 }
 
 // NewDetail creates a detail panel.

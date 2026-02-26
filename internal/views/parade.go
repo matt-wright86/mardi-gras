@@ -43,19 +43,19 @@ func (item ParadeItem) isSelectable() bool {
 
 // Parade is the grouped issue list view.
 type Parade struct {
-	Items         []ParadeItem
-	Cursor        int
-	ShowClosed    bool
-	Width         int
-	Height        int
-	ScrollOffset  int
-	AllIssues     []data.Issue
-	Groups        map[data.ParadeStatus][]data.Issue
-	issueMap      map[string]*data.Issue
-	blockingTypes map[string]bool
-	SelectedIssue *data.Issue
-	ActiveAgents  map[string]string // issueID -> tmux window name
-	TownStatus    *gastown.TownStatus
+	Items           []ParadeItem
+	Cursor          int
+	ShowClosed      bool
+	Width           int
+	Height          int
+	ScrollOffset    int
+	AllIssues       []data.Issue
+	Groups          map[data.ParadeStatus][]data.Issue
+	issueMap        map[string]*data.Issue
+	blockingTypes   map[string]bool
+	SelectedIssue   *data.Issue
+	ActiveAgents    map[string]string // issueID -> tmux window name
+	TownStatus      *gastown.TownStatus
 	ChangedIDs      map[string]bool  // recently changed issues (change indicator dot)
 	Selected        map[string]bool  // multi-selected issue IDs
 	MatchHighlights map[string][]int // issueID -> matched char indices in title (fuzzy search)

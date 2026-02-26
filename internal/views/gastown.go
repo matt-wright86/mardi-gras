@@ -44,9 +44,9 @@ type GasTown struct {
 	expandedConvoy int                    // index of expanded convoy, -1 = none
 
 	// Mail state
-	mailCursor   int                    // cursor within mail list
-	mailMessages []gastown.MailMessage  // messages from gt mail inbox
-	expandedMail int                    // index of expanded message, -1 = none
+	mailCursor   int                   // cursor within mail list
+	mailMessages []gastown.MailMessage // messages from gt mail inbox
+	expandedMail int                   // index of expanded message, -1 = none
 
 	// Costs data
 	costs *gastown.CostsOutput

@@ -12,10 +12,10 @@ func TestParseExternalRef(t *testing.T) {
 		{"external:gastown:gt-c3f2", false, "gastown", "gt-c3f2"},
 		{"external:wyvern:wy-e5f6", false, "wyvern", "wy-e5f6"},
 		{"external:beads:bd-001", false, "beads", "bd-001"},
-		{"bd-001", true, "", ""},        // not external
-		{"external:", true, "", ""},       // malformed
-		{"external:foo", true, "", ""},    // missing id
-		{"blocks", true, "", ""},          // plain dependency type
+		{"bd-001", true, "", ""},       // not external
+		{"external:", true, "", ""},    // malformed
+		{"external:foo", true, "", ""}, // missing id
+		{"blocks", true, "", ""},       // plain dependency type
 	}
 	for _, tt := range tests {
 		ref := ParseExternalRef(tt.input)

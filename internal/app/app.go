@@ -1,8 +1,8 @@
 package app
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 	"os/exec"
 	"time"
 
@@ -97,8 +97,8 @@ type Model struct {
 	convoyIssueIDs []string
 
 	// Mail reply state
-	mailReplying  bool
-	mailReplyID   string
+	mailReplying   bool
+	mailReplyID    string
 	mailReplyInput textinput.Model
 
 	// Mail compose state (two-step: subject then body)

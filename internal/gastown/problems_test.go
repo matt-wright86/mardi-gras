@@ -101,8 +101,8 @@ func TestDetectProblemsHealthy(t *testing.T) {
 func TestDetectProblemsMultiple(t *testing.T) {
 	status := &TownStatus{
 		Agents: []AgentRuntime{
-			{Name: "Toast", Role: "polecat", HasWork: true, State: "idle"},   // stalled
-			{Name: "Muffin", Role: "polecat", State: "backoff"},               // backoff
+			{Name: "Toast", Role: "polecat", HasWork: true, State: "idle"},        // stalled
+			{Name: "Muffin", Role: "polecat", State: "backoff"},                   // backoff
 			{Name: "Stale", Role: "polecat", Running: false, HookBead: "bd-e5f6"}, // zombie
 		},
 	}
