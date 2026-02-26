@@ -1116,9 +1116,9 @@ func eventColor(ev gastown.Event) lipgloss.Color {
 	case "session_death":
 		return ui.StateBackoff // death = red
 	case "nudge":
-		return ui.BrightGold // nudge = attention
+		return ui.BrightGold
 	case "handoff":
-		return ui.BrightPurple // handoff = transition
+		return ui.BrightPurple
 	case "session_start", "spawn":
 		return ui.StateSpawn // start = cyan
 	case "patrol_started":

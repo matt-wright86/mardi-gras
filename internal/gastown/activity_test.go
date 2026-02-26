@@ -13,7 +13,7 @@ func TestEventParsing(t *testing.T) {
 {"ts":"2026-02-23T01:02:37Z","source":"gt","type":"sling","actor":"mayor","payload":{"target":"mardi_gras/quartz","bead":"bd-c8q"},"visibility":"feed"}
 {"ts":"2026-02-23T01:05:00Z","source":"gt","type":"nudge","actor":"mayor","payload":{"target":"mardi_gras/quartz","reason":"Run gt prime"},"visibility":"feed"}
 `
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -49,7 +49,7 @@ func TestEventParsingLimit(t *testing.T) {
 {"ts":"4","source":"gt","type":"d","actor":"x","visibility":"feed"}
 {"ts":"5","source":"gt","type":"e","actor":"x","visibility":"feed"}
 `
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -72,7 +72,7 @@ func TestEventParsingLimit(t *testing.T) {
 func TestEventParsingEmpty(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "events.jsonl")
-	if err := os.WriteFile(path, []byte(""), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(""), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

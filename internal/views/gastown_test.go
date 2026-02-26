@@ -352,7 +352,7 @@ func TestProgressBar(t *testing.T) {
 			bar := progressBar(tc.done, tc.total, tc.width)
 			// The bar contains ANSI escape codes from lipgloss, so we can't check raw length.
 			// But we can check the content is not empty for non-zero widths.
-			if tc.width > 0 && len(bar) == 0 {
+			if tc.width > 0 && bar == "" {
 				t.Fatal("expected non-empty progress bar")
 			}
 			if tc.width == 0 && bar != "" {

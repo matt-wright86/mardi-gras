@@ -425,7 +425,7 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 		dueBadge = " " + ui.OverdueBadge.Render(label)
 		dueWidth = lipgloss.Width(dueBadge)
 	} else if issue.DueAt != nil && issue.Status != data.StatusClosed {
-		days := int(issue.DueAt.Sub(time.Now()).Hours() / 24)
+		days := int(time.Until(*issue.DueAt).Hours() / 24)
 		if days <= 3 {
 			label := fmt.Sprintf("%s %s", ui.SymDueDate, issue.DueLabel())
 			dueBadge = " " + ui.DueSoonBadge.Render(label)

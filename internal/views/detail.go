@@ -831,7 +831,7 @@ func truncate(s string, maxLen int) string {
 }
 
 // depTypeDisplay returns a symbol, verb, and style for a non-blocking dependency type.
-func depTypeDisplay(depType string) (symbol string, verb string, style lipgloss.Style) {
+func depTypeDisplay(depType string) (symbol, verb string, style lipgloss.Style) {
 	switch depType {
 	case "related":
 		return ui.SymRelated, "related to", ui.DepRelated

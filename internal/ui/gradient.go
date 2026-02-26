@@ -61,7 +61,7 @@ func ApplyShimmerGradient(text string, offset float64) string {
 			t = float64(i)/float64(width-1) + offset
 		}
 		// Wrap to [0, 1]
-		t = t - math.Floor(t)
+		t -= math.Floor(t)
 
 		// Three-stop gradient with wrap: Purple → Gold → Green → Purple
 		var c colorful.Color

@@ -2234,38 +2234,24 @@ func (m Model) View() string {
 		rightPanel,
 	)
 
+	inputBarStyle := lipgloss.NewStyle().Padding(0, 1).Width(m.width)
 	var bottomBar string
-	if m.toast.Active() {
+	switch {
+	case m.toast.Active():
 		bottomBar = m.toast.View(m.width)
-	} else if m.parade.SelectionCount() > 0 {
-		// Bulk action bar when items are multi-selected
+	case m.parade.SelectionCount() > 0:
 		bottomBar = components.BulkFooter(m.width, m.parade.SelectionCount(), m.gtEnv.Available)
-	} else if m.nudging {
-		bottomBar = lipgloss.NewStyle().
-			Padding(0, 1).
-			Width(m.width).
-			Render(m.nudgeInput.View())
-	} else if m.mailComposing {
-		bottomBar = lipgloss.NewStyle().
-			Padding(0, 1).
-			Width(m.width).
-			Render(m.mailComposeInput.View())
-	} else if m.mailReplying {
-		bottomBar = lipgloss.NewStyle().
-			Padding(0, 1).
-			Width(m.width).
-			Render(m.mailReplyInput.View())
-	} else if m.convoyCreating {
-		bottomBar = lipgloss.NewStyle().
-			Padding(0, 1).
-			Width(m.width).
-			Render(m.convoyInput.View())
-	} else if m.filtering || m.filterInput.Value() != "" {
-		bottomBar = lipgloss.NewStyle().
-			Padding(0, 1).
-			Width(m.width).
-			Render(m.filterInput.View())
-	} else {
+	case m.nudging:
+		bottomBar = inputBarStyle.Render(m.nudgeInput.View())
+	case m.mailComposing:
+		bottomBar = inputBarStyle.Render(m.mailComposeInput.View())
+	case m.mailReplying:
+		bottomBar = inputBarStyle.Render(m.mailReplyInput.View())
+	case m.convoyCreating:
+		bottomBar = inputBarStyle.Render(m.convoyInput.View())
+	case m.filtering || m.filterInput.Value() != "":
+		bottomBar = inputBarStyle.Render(m.filterInput.View())
+	default:
 		footer := components.NewFooter(m.width, m.activPane == PaneDetail, m.gtEnv.Available)
 		footer.SourcePath = m.watchPath
 		footer.LastRefresh = m.lastFileMod

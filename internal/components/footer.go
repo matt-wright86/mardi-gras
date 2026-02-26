@@ -106,7 +106,7 @@ func (f Footer) View() string {
 }
 
 // NewFooter creates a footer with the given width and pane focus.
-func NewFooter(width int, detailFocused bool, hasGasTown bool) Footer {
+func NewFooter(width int, detailFocused, hasGasTown bool) Footer {
 	bindings := ParadeBindings
 	if detailFocused {
 		bindings = DetailBindings
@@ -126,15 +126,15 @@ func NewFooter(width int, detailFocused bool, hasGasTown bool) Footer {
 // insertBefore inserts extra bindings before the binding with the given key.
 func insertBefore(bindings []FooterBinding, key string, extra ...FooterBinding) []FooterBinding {
 	for i, b := range bindings {
-		if b.Key == key {
-			result := make([]FooterBinding, 0, len(bindings)+len(extra))
-			result = append(result, bindings[:i]...)
-			result = append(result, extra...)
-			result = append(result, bindings[i:]...)
-			return result
+		if b.Key != key {
+			continue
 		}
+		result := make([]FooterBinding, 0, len(bindings)+len(extra))
+		result = append(result, bindings[:i]...)
+		result = append(result, extra...)
+		result = append(result, bindings[i:]...)
+		return result
 	}
-	// Key not found, append at end
 	return append(bindings, extra...)
 }
 

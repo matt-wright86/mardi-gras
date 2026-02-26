@@ -110,8 +110,7 @@ func (p Palette) Init() tea.Cmd {
 
 // Update handles messages for the palette.
 func (p Palette) Update(msg tea.Msg) (Palette, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "esc":
 			return p, func() tea.Msg {
