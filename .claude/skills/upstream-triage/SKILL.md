@@ -60,6 +60,18 @@ Show the user a summary table:
 
 Then for each "can help" issue, show the drafted response and ask whether to post it.
 
+## Step 5: Update triage log
+
+After presenting findings, append to the triage log in `docs/internal/upstream-check/UPSTREAM_JOURNAL.md`.
+
+For issues we commented on:
+
+```markdown
+| <date> | [#<number>](https://github.com/steveyegge/beads/issues/<number>) | <brief description> |
+```
+
+For issues triaged but not commented on, update the "triaged but not commented" table.
+
 ## Important
 
 - Do NOT post comments without explicit user approval

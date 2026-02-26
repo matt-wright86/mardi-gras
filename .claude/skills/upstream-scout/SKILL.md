@@ -22,7 +22,7 @@ For each repo in scope:
 ### Recent commits on main
 
 ```bash
-gh api repos/steveyegge/<repo>/commits?per_page=30 --jq '.[] | "\(.sha[0:7]) \(.commit.message | split("\n")[0])"'
+gh api 'repos/steveyegge/<repo>/commits?per_page=30' --jq '.[] | "\(.sha[0:7]) \(.commit.committer.date[:10]) \(.commit.message | split("\n")[0])"'
 ```
 
 ### Recent releases
@@ -39,11 +39,12 @@ gh pr list --repo steveyegge/<repo> --state open --limit 10
 
 ## Step 2: Check our current compatibility baseline
 
-Read the memory file for current upstream tracking state:
+Read these sources for the previous check state:
 
-- Check `~/.claude/projects/-Users-matthewwright-Work-mardi-gras/memory/MEMORY.md` for the "Upstream Status" section
-- Check `docs/internal/` for previous upstream research docs
-- Check `go.mod` for current dependency versions
+- **Journal**: `docs/internal/upstream-check/UPSTREAM_JOURNAL.md` — chronological log of all checks
+- **Memory**: `~/.claude/projects/-Users-matthewwright-Work-mardi-gras/memory/MEMORY.md` — "Upstream Status" section
+- **Previous docs**: `docs/internal/upstream-check/` — full research docs from prior checks
+- **go.mod** — current dependency versions
 
 ## Step 3: Analyze each upstream change
 
@@ -71,10 +72,10 @@ Changes that don't directly affect mg but provide context:
 
 ## Step 4: Create research document
 
-Write a research document to `docs/internal/<repo>-upstream-check-<date>.md` with:
+Write a research document to `docs/internal/upstream-check/upstream-check-<date>.md` with:
 
 ```markdown
-# <Repo> Upstream Check — <date>
+# Upstream Check — <date>
 
 ## TL;DR
 <2-3 sentence summary of key findings>
@@ -82,7 +83,7 @@ Write a research document to `docs/internal/<repo>-upstream-check-<date>.md` wit
 ## Current baseline
 - mg version: <latest tag>
 - <repo> version in go.mod or last checked: <version>
-- Previous check: <link to last doc if exists>
+- Previous check: <link to last doc>
 
 ## Breaking changes
 <For each: what changed, which mg files affected, suggested fix>
@@ -99,7 +100,23 @@ Write a research document to `docs/internal/<repo>-upstream-check-<date>.md` wit
 <Filtered list of relevant commits>
 ```
 
-## Step 5: Update memory
+## Step 5: Update journal and memory
+
+### Journal
+
+Prepend an entry to `docs/internal/upstream-check/UPSTREAM_JOURNAL.md` (newest first, below header):
+
+```markdown
+## <date>
+
+**Scope**: <beads|gastown|both> | **Doc**: [upstream-check-<date>.md](upstream-check-<date>.md)
+
+<2-3 sentence summary>
+
+**Breaking**: <summary or "None for mg">. **Action items**: <numbered list>.
+```
+
+### Memory
 
 Update the "Upstream Status" section in MEMORY.md with:
 - Date of this check
