@@ -153,14 +153,35 @@ func TestResolveSourceExplicitPath(t *testing.T) {
 	}
 }
 
-func TestResolveSourceJSONLExists(t *testing.T) {
+func TestResolveSourceCLIPreferredOverJSONL(t *testing.T) {
+	if _, err := exec.LookPath("bd"); err != nil {
+		t.Skip("bd not on PATH, skipping CLI preference test")
+	}
+
 	dir := t.TempDir()
 	mustMkdir(t, filepath.Join(dir, ".beads"))
 	mustWrite(t, filepath.Join(dir, ".beads", "issues.jsonl"), []byte("[]"))
 
 	src := resolveSource(dir, "")
+	if src.Mode != data.SourceCLI {
+		t.Fatalf("expected SourceCLI when bd is on PATH, got %d", src.Mode)
+	}
+	if src.ProjectDir != dir {
+		t.Fatalf("expected ProjectDir %q, got %q", dir, src.ProjectDir)
+	}
+}
+
+func TestResolveSourceJSONLLegacyFallback(t *testing.T) {
+	dir := t.TempDir()
+	mustMkdir(t, filepath.Join(dir, ".beads"))
+	mustWrite(t, filepath.Join(dir, ".beads", "issues.jsonl"), []byte("[]"))
+
+	// Remove bd from PATH so CLI is not available
+	t.Setenv("PATH", dir)
+
+	src := resolveSource(dir, "")
 	if src.Mode != data.SourceJSONL {
-		t.Fatalf("expected SourceJSONL, got %d", src.Mode)
+		t.Fatalf("expected SourceJSONL as legacy fallback, got %d", src.Mode)
 	}
 	if src.Path == "" {
 		t.Fatal("expected non-empty Path")
@@ -177,6 +198,9 @@ func TestResolveSourceJSONLWalksUp(t *testing.T) {
 
 	child := filepath.Join(root, "a", "b")
 	mustMkdir(t, child)
+
+	// Remove bd from PATH so we test the JSONL walkup path
+	t.Setenv("PATH", root)
 
 	src := resolveSource(child, "")
 	if src.Mode != data.SourceJSONL {

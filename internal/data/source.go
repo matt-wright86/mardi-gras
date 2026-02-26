@@ -13,8 +13,8 @@ import (
 type SourceMode int
 
 const (
-	SourceJSONL SourceMode = iota // Read from .beads/issues.jsonl
-	SourceCLI                     // Shell out to bd list --json
+	SourceJSONL SourceMode = iota // Legacy: read from .beads/issues.jsonl (or --path)
+	SourceCLI                     // Preferred: shell out to bd list --json
 )
 
 // Source describes how mg loads its issue data.

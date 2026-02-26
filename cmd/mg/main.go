@@ -150,8 +150,8 @@ func bdOnPath() bool {
 // resolveSource determines how mg should load issues.
 //
 //	--path flag → SourceJSONL with explicit path
-//	.beads/issues.jsonl exists → SourceJSONL (current behavior)
-//	.beads/ dir exists, no JSONL, bd on PATH → SourceCLI
+//	.beads/ dir exists, bd on PATH → SourceCLI (preferred)
+//	.beads/issues.jsonl exists → SourceJSONL (legacy fallback)
 //	neither → empty Source (caller should exit with error)
 func resolveSource(cwd, pathFlag string) data.Source {
 	if pathFlag != "" {
@@ -163,20 +163,20 @@ func resolveSource(cwd, pathFlag string) data.Source {
 		}
 	}
 
-	// Try JSONL first
+	// Prefer CLI when bd is available (JSONL removed upstream in beads v0.56+)
+	if projectDir := findBeadsDir(cwd); projectDir != "" && bdOnPath() {
+		return data.Source{
+			Mode:       data.SourceCLI,
+			ProjectDir: projectDir,
+		}
+	}
+
+	// Legacy fallback: JSONL file exists but bd not on PATH
 	if jsonlPath := findBeadsFile(cwd); jsonlPath != "" {
 		return data.Source{
 			Mode:       data.SourceJSONL,
 			Path:       jsonlPath,
 			ProjectDir: filepath.Dir(filepath.Dir(jsonlPath)),
-		}
-	}
-
-	// Fallback: .beads/ dir exists but no JSONL → try CLI
-	if projectDir := findBeadsDir(cwd); projectDir != "" && bdOnPath() {
-		return data.Source{
-			Mode:       data.SourceCLI,
-			ProjectDir: projectDir,
 		}
 	}
 

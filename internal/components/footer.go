@@ -70,7 +70,7 @@ func (f Footer) View() string {
 		mode := "(cli)"
 		if f.SourceMode != data.SourceCLI {
 			name = filepath.Base(f.SourcePath)
-			mode = "(auto)"
+			mode = "(legacy)"
 			if f.PathExplicit {
 				mode = "(--path)"
 			}
