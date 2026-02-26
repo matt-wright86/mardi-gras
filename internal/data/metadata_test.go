@@ -24,8 +24,12 @@ func TestLoadMetadataSchemaNoConfig(t *testing.T) {
 func TestLoadMetadataSchemaNoValidation(t *testing.T) {
 	dir := t.TempDir()
 	beadsDir := filepath.Join(dir, ".beads")
-	os.MkdirAll(beadsDir, 0o755)
-	os.WriteFile(filepath.Join(beadsDir, "config.yaml"), []byte("no-db: true\n"), 0o644)
+	if err := os.MkdirAll(beadsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(beadsDir, "config.yaml"), []byte("no-db: true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	schema := LoadMetadataSchema(dir)
 	if schema != nil {
@@ -36,7 +40,9 @@ func TestLoadMetadataSchemaNoValidation(t *testing.T) {
 func TestLoadMetadataSchemaBasic(t *testing.T) {
 	dir := t.TempDir()
 	beadsDir := filepath.Join(dir, ".beads")
-	os.MkdirAll(beadsDir, 0o755)
+	if err := os.MkdirAll(beadsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 
 	config := `
 validation:
@@ -61,7 +67,9 @@ validation:
       urgent:
         type: bool
 `
-	os.WriteFile(filepath.Join(beadsDir, "config.yaml"), []byte(config), 0o644)
+	if err := os.WriteFile(filepath.Join(beadsDir, "config.yaml"), []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	schema := LoadMetadataSchema(dir)
 	if schema == nil {
@@ -119,7 +127,9 @@ func TestLoadMetadataSchemaRedirect(t *testing.T) {
 
 	// Create the actual beads dir elsewhere
 	actualBeads := filepath.Join(dir, "actual-beads")
-	os.MkdirAll(actualBeads, 0o755)
+	if err := os.MkdirAll(actualBeads, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	config := `
 validation:
   metadata:
@@ -130,13 +140,18 @@ validation:
         values: [dev, staging, prod]
         required: true
 `
-	os.WriteFile(filepath.Join(actualBeads, "config.yaml"), []byte(config), 0o644)
+	if err := os.WriteFile(filepath.Join(actualBeads, "config.yaml"), []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	// Create .beads/ with redirect
 	beadsDir := filepath.Join(dir, ".beads")
-	os.MkdirAll(beadsDir, 0o755)
-	// Redirect is relative to .beads/
-	os.WriteFile(filepath.Join(beadsDir, "redirect"), []byte("../actual-beads"), 0o644)
+	if err := os.MkdirAll(beadsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(beadsDir, "redirect"), []byte("../actual-beads"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	schema := LoadMetadataSchema(dir)
 	if schema == nil {
@@ -224,7 +239,9 @@ func TestSortedFieldNames(t *testing.T) {
 func TestDefaultModeIsNone(t *testing.T) {
 	dir := t.TempDir()
 	beadsDir := filepath.Join(dir, ".beads")
-	os.MkdirAll(beadsDir, 0o755)
+	if err := os.MkdirAll(beadsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 
 	config := `
 validation:
@@ -233,7 +250,9 @@ validation:
       name:
         type: string
 `
-	os.WriteFile(filepath.Join(beadsDir, "config.yaml"), []byte(config), 0o644)
+	if err := os.WriteFile(filepath.Join(beadsDir, "config.yaml"), []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	schema := LoadMetadataSchema(dir)
 	if schema == nil {

@@ -136,7 +136,7 @@ func fuzzyFilter(issues []Issue, query string) []Issue {
 
 // FilterIssuesWithHighlights returns filtered issues plus a map of issue ID → matched
 // character indices in the "ID + Title" search string. Used for rendering highlights.
-func FilterIssuesWithHighlights(issues []Issue, query string) ([]Issue, map[string][]int) {
+func FilterIssuesWithHighlights(issues []Issue, query string) (result []Issue, matchMap map[string][]int) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return issues, nil
@@ -178,8 +178,8 @@ func FilterIssuesWithHighlights(issues []Issue, query string) ([]Issue, map[stri
 	src := issueSearchSource{issues: candidates}
 	matches := fuzzy.FindFrom(freeQuery, src)
 
-	result := make([]Issue, 0, len(matches))
-	highlights := make(map[string][]int)
+	result = make([]Issue, 0, len(matches))
+	matchMap = make(map[string][]int)
 	for _, match := range matches {
 		issue := candidates[match.Index]
 		result = append(result, issue)
@@ -194,9 +194,9 @@ func FilterIssuesWithHighlights(issues []Issue, query string) ([]Issue, map[stri
 				}
 			}
 			if len(titleIndices) > 0 {
-				highlights[issue.ID] = titleIndices
+				matchMap[issue.ID] = titleIndices
 			}
 		}
 	}
-	return result, highlights
+	return result, matchMap
 }
