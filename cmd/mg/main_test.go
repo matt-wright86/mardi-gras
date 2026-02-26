@@ -9,10 +9,24 @@ import (
 	"github.com/matt-wright86/mardi-gras/internal/data"
 )
 
+func mustMkdir(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustWrite(t *testing.T, path string, content []byte) {
+	t.Helper()
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestFindBeadsFileInCurrentDir(t *testing.T) {
 	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, ".beads"), 0o755)
-	os.WriteFile(filepath.Join(dir, ".beads", "issues.jsonl"), []byte("[]"), 0o644)
+	mustMkdir(t, filepath.Join(dir, ".beads"))
+	mustWrite(t, filepath.Join(dir, ".beads", "issues.jsonl"), []byte("[]"))
 
 	got := findBeadsFile(dir)
 	want := filepath.Join(dir, ".beads", "issues.jsonl")
@@ -23,11 +37,11 @@ func TestFindBeadsFileInCurrentDir(t *testing.T) {
 
 func TestFindBeadsFileWalksUp(t *testing.T) {
 	root := t.TempDir()
-	os.MkdirAll(filepath.Join(root, ".beads"), 0o755)
-	os.WriteFile(filepath.Join(root, ".beads", "issues.jsonl"), []byte("[]"), 0o644)
+	mustMkdir(t, filepath.Join(root, ".beads"))
+	mustWrite(t, filepath.Join(root, ".beads", "issues.jsonl"), []byte("[]"))
 
 	child := filepath.Join(root, "a", "b")
-	os.MkdirAll(child, 0o755)
+	mustMkdir(t, child)
 
 	got := findBeadsFile(child)
 	want := filepath.Join(root, ".beads", "issues.jsonl")
@@ -141,8 +155,8 @@ func TestResolveSourceExplicitPath(t *testing.T) {
 
 func TestResolveSourceJSONLExists(t *testing.T) {
 	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, ".beads"), 0o755)
-	os.WriteFile(filepath.Join(dir, ".beads", "issues.jsonl"), []byte("[]"), 0o644)
+	mustMkdir(t, filepath.Join(dir, ".beads"))
+	mustWrite(t, filepath.Join(dir, ".beads", "issues.jsonl"), []byte("[]"))
 
 	src := resolveSource(dir, "")
 	if src.Mode != data.SourceJSONL {
@@ -158,11 +172,11 @@ func TestResolveSourceJSONLExists(t *testing.T) {
 
 func TestResolveSourceJSONLWalksUp(t *testing.T) {
 	root := t.TempDir()
-	os.MkdirAll(filepath.Join(root, ".beads"), 0o755)
-	os.WriteFile(filepath.Join(root, ".beads", "issues.jsonl"), []byte("[]"), 0o644)
+	mustMkdir(t, filepath.Join(root, ".beads"))
+	mustWrite(t, filepath.Join(root, ".beads", "issues.jsonl"), []byte("[]"))
 
 	child := filepath.Join(root, "a", "b")
-	os.MkdirAll(child, 0o755)
+	mustMkdir(t, child)
 
 	src := resolveSource(child, "")
 	if src.Mode != data.SourceJSONL {
@@ -182,7 +196,7 @@ func TestResolveSourceCLIFallback(t *testing.T) {
 
 	dir := t.TempDir()
 	// Create .beads/ dir but no issues.jsonl
-	os.MkdirAll(filepath.Join(dir, ".beads"), 0o755)
+	mustMkdir(t, filepath.Join(dir, ".beads"))
 
 	src := resolveSource(dir, "")
 	if src.Mode != data.SourceCLI {
@@ -196,7 +210,7 @@ func TestResolveSourceCLIFallback(t *testing.T) {
 func TestResolveSourceNoBdNoCLI(t *testing.T) {
 	dir := t.TempDir()
 	// Create .beads/ dir but no issues.jsonl
-	os.MkdirAll(filepath.Join(dir, ".beads"), 0o755)
+	mustMkdir(t, filepath.Join(dir, ".beads"))
 
 	// Override PATH to exclude bd
 	t.Setenv("PATH", dir) // temp dir won't have bd
@@ -227,7 +241,7 @@ func TestResolveSourceNoBeadsDir(t *testing.T) {
 
 func TestFindBeadsDirInCurrentDir(t *testing.T) {
 	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, ".beads"), 0o755)
+	mustMkdir(t, filepath.Join(dir, ".beads"))
 
 	got := findBeadsDir(dir)
 	if got != dir {
@@ -237,10 +251,10 @@ func TestFindBeadsDirInCurrentDir(t *testing.T) {
 
 func TestFindBeadsDirWalksUp(t *testing.T) {
 	root := t.TempDir()
-	os.MkdirAll(filepath.Join(root, ".beads"), 0o755)
+	mustMkdir(t, filepath.Join(root, ".beads"))
 
 	child := filepath.Join(root, "a", "b")
-	os.MkdirAll(child, 0o755)
+	mustMkdir(t, child)
 
 	got := findBeadsDir(child)
 	if got != root {
