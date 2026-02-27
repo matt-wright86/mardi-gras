@@ -1201,28 +1201,28 @@ func TestGasTownNoScorecardsSection(t *testing.T) {
 	}
 }
 
-func TestGasTownAgentAliasDisplayed(t *testing.T) {
+func TestGasTownAgentNameDisplayed(t *testing.T) {
 	g := NewGasTown(100, 30)
+	// Real gt status --json structure: name=meaningful, agent_alias=runtime, agent_info=runtime
 	status := &gastown.TownStatus{
 		Agents: []gastown.AgentRuntime{
-			{Name: "mardi_gras-polecats-quartz", Role: "polecat", State: "working", AgentAlias: "quartz", AgentInfo: "claude/opus"},
-			{Name: "crew-alpha", Role: "crew", State: "idle"},
+			{Name: "mayor", Role: "coordinator", State: "idle", AgentAlias: "claude", AgentInfo: "claude"},
+			{Name: "matt", Role: "crew", State: "idle", AgentAlias: "claude", AgentInfo: "claude"},
+			{Name: "witness", Role: "witness", State: "idle"},
 		},
 	}
 	g.SetStatus(status, gastown.Env{Available: true})
 
 	view := g.View()
-	// Should show the alias "quartz" instead of the full name
-	if !strings.Contains(view, "quartz") {
-		t.Fatal("view should contain agent alias 'quartz'")
+	// Should show the Name field, not AgentAlias
+	if !strings.Contains(view, "mayor") {
+		t.Fatal("view should contain agent name 'mayor'")
 	}
-	// Agent info tag should still appear
-	if !strings.Contains(view, "claude/opus") {
-		t.Fatal("view should contain agent info 'claude/opus'")
+	if !strings.Contains(view, "matt") {
+		t.Fatal("view should contain agent name 'matt'")
 	}
-	// Agent without alias should show full name
-	if !strings.Contains(view, "crew-alpha") {
-		t.Fatal("view should contain full name 'crew-alpha' for agent without alias")
+	if !strings.Contains(view, "witness") {
+		t.Fatal("view should contain agent name 'witness'")
 	}
 }
 
