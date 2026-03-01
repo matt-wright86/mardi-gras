@@ -83,7 +83,7 @@ func splitSections(raw string) map[string][]string {
 		}
 
 		// Section headers: non-indented lines (possibly with trailing colon)
-		if len(line) > 0 && line[0] != ' ' && line[0] != '\t' && line[0] != '*' && line[0] != '-' {
+		if line != "" && line[0] != ' ' && line[0] != '\t' && line[0] != '*' && line[0] != '-' {
 			currentKey = strings.ToLower(strings.TrimRight(trimmed, ":"))
 			continue
 		}
@@ -145,13 +145,14 @@ func parseBulletLine(s *DoltServer, line string) {
 	fields := strings.Fields(line)
 
 	for i, f := range fields {
-		if strings.HasPrefix(f, ":") {
+		switch {
+		case strings.HasPrefix(f, ":"):
 			s.Port = f
-		} else if strings.EqualFold(f, "PID") && i+1 < len(fields) {
+		case strings.EqualFold(f, "PID") && i+1 < len(fields):
 			s.PID, _ = strconv.Atoi(fields[i+1])
-		} else if strings.EqualFold(f, "stopped") || strings.EqualFold(f, "down") {
+		case strings.EqualFold(f, "stopped") || strings.EqualFold(f, "down"):
 			s.Running = false
-		} else if s.Port != "" && s.Label == "" && !strings.EqualFold(f, "PID") && s.PID == 0 {
+		case s.Port != "" && s.Label == "" && !strings.EqualFold(f, "PID") && s.PID == 0:
 			// First non-port, non-PID token after port is the label
 			if _, err := strconv.Atoi(f); err != nil {
 				s.Label = f
@@ -165,21 +166,22 @@ func parseDetailLine(s *DoltServer, line string) {
 	fields := strings.Fields(line)
 	for i, f := range fields {
 		lower := strings.ToLower(f)
-		if lower == "mb" || lower == "gb" || lower == "kb" {
+		switch {
+		case lower == "mb" || lower == "gb" || lower == "kb":
 			if i > 0 {
 				s.DiskUsage = fields[i-1] + " " + f
 			}
-		} else if strings.HasSuffix(lower, "mb") || strings.HasSuffix(lower, "gb") {
+		case strings.HasSuffix(lower, "mb") || strings.HasSuffix(lower, "gb"):
 			if s.DiskUsage == "" {
 				s.DiskUsage = f
 			}
-		} else if strings.Contains(lower, "conn") {
+		case strings.Contains(lower, "conn"):
 			if i > 0 {
 				s.Connections = fields[i-1] + " " + f
 			} else {
 				s.Connections = f
 			}
-		} else if strings.HasSuffix(lower, "ms") || strings.HasSuffix(lower, "µs") {
+		case strings.HasSuffix(lower, "ms") || strings.HasSuffix(lower, "µs"):
 			s.Latency = f
 		}
 	}
