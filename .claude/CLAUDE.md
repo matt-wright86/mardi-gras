@@ -1,6 +1,6 @@
 # Mardi Gras — Project Instructions
 
-Mardi Gras (`mg`) is a BubbleTea TUI for Beads issues with full Gas Town agent orchestration. It reads `.beads/issues.jsonl` directly — no daemon, no config file. When `gt` is on PATH, it becomes a control surface for multi-agent workflows.
+Mardi Gras (`mg`) is a BubbleTea TUI for Beads issues with full Gas Town agent orchestration. It reads issues via `bd list --json` (SourceCLI) — no daemon, no config file. When `gt` is on PATH, it becomes a control surface for multi-agent workflows.
 
 ## Build & Test
 
@@ -44,7 +44,6 @@ This project uses [Beads](https://github.com/beads-project/beads) for issue trac
 bd ready                              # Find unblocked work
 bd update <id> --claim                # Atomically claim an issue (assignee + in_progress)
 bd close <id>                         # Mark done
-bd sync                               # Sync beads data
 ```
 
 Do NOT use `bd edit` — it opens `$EDITOR` and blocks agents.
@@ -54,7 +53,7 @@ Do NOT use `bd edit` — it opens `$EDITOR` and blocks agents.
 Mardi Gras integrates with [Gas Town](https://github.com/steveyegge/gastown) (`gt`) for multi-agent orchestration. The `internal/gastown` package (15 files, no internal deps) handles:
 
 - **Environment detection** (`detect.go`): Reads `GT_ROLE`, `GT_RIG`, `GT_SCOPE`, `GT_POLECAT`, `GT_CREW` env vars and checks if `gt` is on PATH. Features activate progressively: Beads-only → gt available → inside Gas Town.
-- **Status parsing** (`status.go`): Parses `gt status --json` output. The raw JSON nests agents under `rigs[].agents`; `normalizeStatus()` flattens them into a single `Agents` slice for the UI. If `AgentRuntime.State` is empty, default to "idle". Gas Town v0.8.0+ always provides State.
+- **Status parsing** (`status.go`): Parses `gt status --json` output. The raw JSON nests agents under `rigs[].agents`; `normalizeStatus()` flattens them into a single `Agents` slice for the UI. If `AgentRuntime.State` is empty, default to "idle". Gas Town v0.9.0+ always provides State.
 - **Sling/Nudge** (`sling.go`): Issue dispatch to polecats, formula selection, multi-sling, nudge, handoff, decommission.
 - **Convoys** (`convoy.go`): List, create, land, close convoys via `gt convoy` commands.
 - **Mail** (`mail.go`): Inbox fetch, reply, compose, archive, mark-read via `gt mail` commands.
@@ -65,7 +64,7 @@ Mardi Gras integrates with [Gas Town](https://github.com/steveyegge/gastown) (`g
 
 **Key gotcha**: `gt status --json` takes ~9 seconds to run. Background polling via BubbleTea Cmds may not return before the user interacts. The Gas Town panel (`ctrl+g`) triggers an on-demand fetch if status is nil and shows a loading state while waiting. Always handle nil status gracefully.
 
-**Testing with real gt**: Run mg from a Gas Town workspace (e.g., `cd ~/gt/<rig>/crew/<name> && ~/Work/mardi-gras/mg`). The `gt` source code is at `~/go/pkg/mod/github.com/steveyegge/gastown@v0.8.0/` — check it directly rather than guessing struct shapes. Rig names cannot contain hyphens (use underscores).
+**Testing with real gt**: Run mg from a Gas Town workspace (e.g., `cd ~/gt/<rig>/crew/<name> && ~/Work/mardi-gras/mg`). The `gt` source code is at `~/go/pkg/mod/github.com/steveyegge/gastown@v0.9.0/` — check it directly rather than guessing struct shapes. Rig names cannot contain hyphens (use underscores).
 
 ## Agent Dispatch
 
