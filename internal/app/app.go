@@ -347,6 +347,11 @@ type activityMsg struct {
 	err    error
 }
 
+type vitalsMsg struct {
+	vitals *gastown.Vitals
+	err    error
+}
+
 // mutateResultMsg is sent when a bd CLI mutation completes.
 type mutateResultMsg struct {
 	issueID string
@@ -1007,6 +1012,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case vitalsMsg:
+		if msg.err == nil && msg.vitals != nil {
+			m.gasTown.SetVitals(msg.vitals)
+		}
+		return m, nil
+
 	case views.GasTownActionMsg:
 		return m.handleGasTownAction(msg)
 
@@ -1198,7 +1209,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.showGasTown {
 			m.showProblems = false
 			m.gasTown.SetStatus(m.townStatus, m.gtEnv)
-			cmds := []tea.Cmd{fetchConvoyList, fetchMailInbox, fetchCosts, fetchActivity}
+			cmds := []tea.Cmd{fetchConvoyList, fetchMailInbox, fetchCosts, fetchActivity, fetchVitals}
 			if m.townStatus == nil {
 				cmds = append(cmds, m.gatedPollAgentState())
 			}
@@ -2199,6 +2210,11 @@ func fetchActivity() tea.Msg {
 	path := gastown.EventsPath()
 	events, err := gastown.LoadRecentEvents(path, 20)
 	return activityMsg{events: events, err: err}
+}
+
+func fetchVitals() tea.Msg {
+	vitals, err := gastown.FetchVitals()
+	return vitalsMsg{vitals: vitals, err: err}
 }
 
 // fetchMoleculeDAG returns a Cmd that fetches molecule DAG and progress for an issue.

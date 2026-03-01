@@ -58,6 +58,7 @@ internal/
     dagrender.go          DAG layout engine: LayoutDAG(), critical path
     problems.go           Problem detection heuristics (stalled, backoff, zombie)
     costs.go              Cost parsing from gt costs
+    vitals.go             Server health + backup freshness from gt vitals
     activity.go           Activity feed event parsing
     velocity.go           Workflow velocity metrics computation
     scorecard.go          HOP agent scorecards (quality aggregates)
@@ -227,6 +228,7 @@ type Model struct {
 | **Data enrichment** | |
 | `commentsMsg` | Update detail panel comments |
 | `costsMsg` | Update Gas Town panel cost data |
+| `vitalsMsg` | Update Gas Town panel server health + backups |
 | `activityMsg` | Update Gas Town panel activity feed |
 | **UI feedback** | |
 | `views.GasTownActionMsg` | Dispatch Gas Town panel actions (nudge, handoff, etc.) |
@@ -260,7 +262,7 @@ type Model struct {
 
 **`views.Detail`** — Wraps a `viewport.Model` (from bubbles) for scrollable content. Renders the selected issue's metadata, description, notes, due dates, HOP quality badges, full dependency breakdown (blocking/resolved/missing/non-blocking/reverse), comments/timeline, and molecule DAG visualization.
 
-**`views.GasTown`** — Three-section control surface (agents/convoys/mail) that replaces the detail pane when active. Navigable with `tab` between sections and `j/k` within. Renders agent roster with role badges and state colors, convoy progress bars with expand/collapse, mail inbox with unread counts, cost dashboard, activity feed, velocity metrics, scorecards, and predictions. Emits `GasTownActionMsg` for user actions.
+**`views.GasTown`** — Three-section control surface (agents/convoys/mail) that replaces the detail pane when active. Navigable with `tab` between sections and `j/k` within. Renders agent roster with role badges and state colors, convoy progress bars with expand/collapse, mail inbox with unread counts, cost dashboard, vitals (server health + backup freshness), activity feed, velocity metrics, scorecards, and predictions. Emits `GasTownActionMsg` for user actions.
 
 **`views.Problems`** — Overlay showing operational issues detected from Gas Town status: stalled agents, backoff loops, zombie sessions.
 
@@ -417,10 +419,11 @@ Features activate progressively: Beads-only (no gt) → Gas Town available (gt o
 
 `CriticalPathSet()`, `CriticalPathTitles()`, and `CriticalPathString()` identify and render the critical path through the molecule using human-readable step titles.
 
-### Analytics (costs.go, activity.go, velocity.go, scorecard.go, predict.go, recommend.go)
+### Analytics (costs.go, vitals.go, activity.go, velocity.go, scorecard.go, predict.go, recommend.go)
 
 Each file handles one data domain:
 - **costs.go** — Parse `gt costs` output for per-agent token/cost breakdown
+- **vitals.go** — Parse `gt vitals` text output for Dolt server health and backup freshness
 - **activity.go** — Parse event streams for the activity feed
 - **velocity.go** — Compute issue flow rates and agent utilization
 - **scorecard.go** — Aggregate HOP quality scores per agent

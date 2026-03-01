@@ -54,6 +54,9 @@ type GasTown struct {
 	// Activity feed
 	events []gastown.Event
 
+	// Vitals data (server health + backups)
+	vitals *gastown.Vitals
+
 	// Velocity metrics
 	velocity *gastown.VelocityMetrics
 
@@ -94,6 +97,9 @@ func (g *GasTown) SetSize(width, height int) {
 func (g *GasTown) SetStatus(status *gastown.TownStatus, env gastown.Env) {
 	// Track work start times: record when agents transition to "working"
 	if status != nil {
+		if g.workStartTimes == nil {
+			g.workStartTimes = make(map[string]time.Time)
+		}
 		currentWorking := make(map[string]bool)
 		for _, a := range status.Agents {
 			if a.State == "working" {
@@ -201,6 +207,11 @@ func (g *GasTown) SetEvents(events []gastown.Event) {
 			g.maxEventCount = c
 		}
 	}
+}
+
+// SetVitals updates the server health and backup data.
+func (g *GasTown) SetVitals(v *gastown.Vitals) {
+	g.vitals = v
 }
 
 // SetVelocity updates the velocity metrics.
@@ -539,6 +550,10 @@ func (g *GasTown) renderContent() string {
 
 	if g.costs != nil {
 		sections = append(sections, g.renderCosts(contentWidth))
+	}
+
+	if g.vitals != nil {
+		sections = append(sections, g.renderVitals(contentWidth))
 	}
 
 	if len(g.events) > 0 {
@@ -1010,6 +1025,85 @@ func (g *GasTown) renderCosts(width int) string {
 		lines = append(lines, tokenStyle.Render(
 			fmt.Sprintf("  tokens: %dk in / %dk out",
 				c.Total.InputTokens/1000, c.Total.OutputTokens/1000)))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// renderVitals renders the server health and backup freshness section.
+func (g *GasTown) renderVitals(width int) string {
+	v := g.vitals
+	var lines []string
+
+	lines = append(lines, ui.SectionDivider("VITALS", width, false))
+
+	// Fallback: if structured parse failed, render raw text dimmed
+	if v.Raw != "" {
+		dimStyle := lipgloss.NewStyle().Foreground(ui.Dim)
+		for _, rawLine := range strings.Split(v.Raw, "\n") {
+			lines = append(lines, dimStyle.Render("  "+rawLine))
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	greenStyle := lipgloss.NewStyle().Foreground(ui.BrightGreen)
+	redStyle := lipgloss.NewStyle().Foreground(ui.StateBackoff)
+	dimStyle := lipgloss.NewStyle().Foreground(ui.Dim)
+
+	// Servers
+	for _, s := range v.Servers {
+		indicator := greenStyle.Render("*")
+		if !s.Running {
+			indicator = redStyle.Render("*")
+		}
+		serverLine := fmt.Sprintf("  %s %s", indicator, s.Port)
+		if s.Label != "" {
+			serverLine += "  " + s.Label
+		}
+		if s.PID > 0 {
+			serverLine += dimStyle.Render(fmt.Sprintf("  PID %d", s.PID))
+		}
+		if !s.Running {
+			serverLine += "  " + redStyle.Render("stopped")
+		}
+		lines = append(lines, serverLine)
+
+		// Detail line (disk, connections, latency)
+		var details []string
+		if s.DiskUsage != "" {
+			details = append(details, s.DiskUsage)
+		}
+		if s.Connections != "" {
+			details = append(details, s.Connections)
+		}
+		if s.Latency != "" {
+			details = append(details, s.Latency)
+		}
+		if len(details) > 0 {
+			lines = append(lines, dimStyle.Render("    "+strings.Join(details, "  ")))
+		}
+	}
+
+	// Backups
+	if v.Backups.LocalLabel != "" || v.Backups.JSONLLabel != "" {
+		if v.Backups.LocalLabel != "" {
+			label := dimStyle.Render(v.Backups.LocalLabel)
+			if v.Backups.LocalOK {
+				label = greenStyle.Render(v.Backups.LocalLabel)
+			}
+			lines = append(lines, fmt.Sprintf("  %s  %s", dimStyle.Render("Local:"), label))
+		}
+		if v.Backups.JSONLLabel != "" {
+			label := dimStyle.Render(v.Backups.JSONLLabel)
+			if v.Backups.JSONLOK {
+				label = greenStyle.Render(v.Backups.JSONLLabel)
+			}
+			lines = append(lines, fmt.Sprintf("  %s  %s", dimStyle.Render("JSONL:"), label))
+		}
+	}
+
+	if len(lines) == 1 {
+		lines = append(lines, dimStyle.Render("  no data"))
 	}
 
 	return strings.Join(lines, "\n")

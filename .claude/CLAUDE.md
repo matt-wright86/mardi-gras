@@ -50,7 +50,7 @@ Do NOT use `bd edit` — it opens `$EDITOR` and blocks agents.
 
 ## Gas Town Integration
 
-Mardi Gras integrates with [Gas Town](https://github.com/steveyegge/gastown) (`gt`) for multi-agent orchestration. The `internal/gastown` package (15 files, no internal deps) handles:
+Mardi Gras integrates with [Gas Town](https://github.com/steveyegge/gastown) (`gt`) for multi-agent orchestration. The `internal/gastown` package (17 files, no internal deps) handles:
 
 - **Environment detection** (`detect.go`): Reads `GT_ROLE`, `GT_RIG`, `GT_SCOPE`, `GT_POLECAT`, `GT_CREW` env vars and checks if `gt` is on PATH. Features activate progressively: Beads-only → gt available → inside Gas Town.
 - **Status parsing** (`status.go`): Parses `gt status --json` output. The raw JSON nests agents under `rigs[].agents`; `normalizeStatus()` flattens them into a single `Agents` slice for the UI. If `AgentRuntime.State` is empty, default to "idle". Gas Town v0.9.0+ always provides State.
@@ -58,6 +58,7 @@ Mardi Gras integrates with [Gas Town](https://github.com/steveyegge/gastown) (`g
 - **Convoys** (`convoy.go`): List, create, land, close convoys via `gt convoy` commands.
 - **Mail** (`mail.go`): Inbox fetch, reply, compose, archive, mark-read via `gt mail` commands.
 - **Molecule DAG** (`molecule.go`, `dagrender.go`): Molecule types and DAG layout engine. `LayoutDAG()` converts tier-grouped steps into renderable rows (single, parallel, connector). `CriticalPathSet()` and `CriticalPathTitles()` for critical path rendering.
+- **Vitals** (`vitals.go`): Dolt server health and backup freshness from `gt vitals` (text parsing with raw fallback).
 - **Analytics** (`costs.go`, `activity.go`, `velocity.go`, `scorecard.go`, `predict.go`, `recommend.go`): Cost dashboard, activity feed, velocity metrics, HOP scorecards, convoy ETA predictions, formula recommendations.
 - **Problems** (`problems.go`): Detection heuristics for stalled agents, backoff loops, zombie sessions.
 - **Comments** (`comments.go`): Issue comment/timeline fetching.

@@ -7,11 +7,12 @@
 - `internal/views`: Parade (left pane), Detail (right pane), Gas Town panel, Problems overlay.
 - `internal/components`: Header, Footer, Help overlay, Command palette, Toast notifications, Create form, Float utility.
 - `internal/data`: JSONL loading, grouping, dependency/status logic, filtering, focus mode, mutations (`bd` CLI), cross-rig deps, HOP types.
-- `internal/gastown`: Gas Town integration — environment detection, `gt status` parsing, sling/nudge/handoff/decommission, convoy CRUD, mail inbox/reply/compose, molecule DAG, costs, activity feed, velocity, scorecards, predictions, formula recommendations.
+- `internal/gastown`: Gas Town integration — environment detection, `gt status` parsing, sling/nudge/handoff/decommission, convoy CRUD, mail inbox/reply/compose, molecule DAG, costs, vitals (server health + backups), activity feed, velocity, scorecards, predictions, formula recommendations.
 - `internal/agent`: Claude Code prompt builder, tmux window launch/discover/kill.
 - `internal/tmux`: tmux status line widget (`mg --status` mode).
 - `internal/ui`: Theme palette (with Gas Town role/state colors), Lipgloss styles, Unicode symbols (including DAG connectors), HOP badge rendering.
 - `testdata/sample.jsonl`: fixture for tests and local demo runs.
+- `testdata/fake-gt.sh`: fake `gt` binary for local Gas Town testing (`make dev-gt`).
 - `docs/`: Architecture docs, internal design docs, screenshots.
 
 ## Beads Data Contract
@@ -38,6 +39,7 @@
 - `make build`: build local binary `./mg` from `./cmd/mg`.
 - `make run`: build and run using auto-detected `.beads/issues.jsonl`.
 - `make run-sample` (or `make dev`): run against `testdata/sample.jsonl`.
+- `make dev-gt`: run with sample data and fake `gt` on PATH (Gas Town features).
 - `make test`: execute `go test ./...` across all packages.
 - `make fmt`: apply standard Go formatting (`go fmt ./...`).
 - `make lint`: run static analysis with `golangci-lint run ./...`.
@@ -60,7 +62,7 @@ To test Gas Town features, run mg from a Gas Town workspace: `cd ~/gt/<rig>/crew
 - Put tests next to implementation as `*_test.go`.
 - Name tests `TestFunctionName` for the happy path, `TestFunctionNameEdgeCase` for variants.
 - Prefer deterministic tests using fixtures from `testdata/`.
-- Run `make test` for all changes; run `make dev` to verify TUI behavior visually.
+- Run `make test` for all changes; run `make dev` to verify TUI behavior visually. Use `make dev-gt` to test Gas Town features.
 - Gas Town integration tests may need a live `gt` environment. Mark those clearly or mock the CLI output.
 
 ## Commit & Pull Request Guidelines

@@ -31,14 +31,22 @@ This builds the `mg` binary and launches it with `testdata/sample.jsonl`.
 
 ### Testing with Gas Town
 
-To test Gas Town features, run `mg` from inside a Gas Town workspace:
+To test Gas Town features locally without a live workspace, use the fake `gt` script:
+
+```bash
+make dev-gt
+```
+
+This puts `testdata/fake-gt.sh` on PATH, providing canned responses for `gt status`, `gt vitals`, `gt costs`, `gt convoy list`, and `gt mail inbox`. Press `ctrl+g` to open the Gas Town panel with full sample data.
+
+For full integration testing against a real Gas Town environment:
 
 ```bash
 cd ~/gt/<rig>/crew/<name>
 ~/path/to/mardi-gras/mg
 ```
 
-The Gas Town panel (`ctrl+g`), sling/nudge, convoys, and mail all require a live `gt` environment. Without it, those features are hidden and mg works as a standalone Beads viewer.
+Without `gt` on PATH, Gas Town features are hidden and mg works as a standalone Beads viewer.
 
 ## Development Commands
 
@@ -46,6 +54,7 @@ The Gas Town panel (`ctrl+g`), sling/nudge, convoys, and mail all require a live
 make build        # compile the mg binary
 make run          # build + run (auto-detects .beads/issues.jsonl)
 make dev          # build + run with sample data
+make dev-gt       # build + run with sample data and fake gt (Gas Town features)
 make test         # go test ./...
 make lint         # golangci-lint run ./...
 make fmt          # go fmt ./...

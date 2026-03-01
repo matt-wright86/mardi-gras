@@ -318,6 +318,7 @@ Multi-select (`space` to mark, then `a` or `s`) slings multiple issues in one ba
 The Gas Town panel includes several data views below the interactive sections:
 
 - **Cost Dashboard** — session counts, token usage, and cost breakdown per agent and time window
+- **Vitals** — Dolt server health (port, PID, disk, connections, latency) and backup freshness from `gt vitals`
 - **Activity Feed** — real-time event ticker showing slings, nudges, handoffs, session starts/deaths, and spawns
 - **Velocity** — issue flow rates (created/closed today and this week), agent utilization percentage, and cost summary
 - **Scorecards** — HOP-powered agent quality ratings aggregated across recent work
