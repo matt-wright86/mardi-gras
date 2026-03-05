@@ -1,11 +1,13 @@
 package gastown
 
-// Problem represents a detected issue with a Gas Town agent.
+// Problem represents a detected issue with a Gas Town agent or beads infrastructure.
 type Problem struct {
-	Type     string       // "stalled", "backoff", "zombie"
-	Agent    AgentRuntime // the affected agent
+	Type     string       // "stalled", "backoff", "zombie", "doctor"
+	Agent    AgentRuntime // the affected agent (zero value for doctor problems)
 	Detail   string       // human-readable description
 	Severity string       // "warn", "error"
+	Category string       // doctor category (e.g. "Core System", "Git Integration")
+	Fix      string       // suggested fix command, if any
 }
 
 // DetectProblems analyzes TownStatus and returns any detected problems.
@@ -59,4 +61,40 @@ func DetectProblems(status *TownStatus) []Problem {
 	}
 
 	return problems
+}
+
+// DoctorProblems converts bd doctor diagnostics into Problem entries.
+// Only error and warning diagnostics are included (not passed checks).
+func DoctorProblems(diagnostics []DoctorDiagnostic) []Problem {
+	var problems []Problem
+	for _, d := range diagnostics {
+		if d.Status == "ok" {
+			continue
+		}
+		sev := "warn"
+		if d.Status == "error" {
+			sev = "error"
+		}
+		fix := ""
+		if len(d.Commands) > 0 {
+			fix = d.Commands[0]
+		}
+		problems = append(problems, Problem{
+			Type:     "doctor",
+			Detail:   d.Name + ": " + d.Explanation,
+			Severity: sev,
+			Category: d.Category,
+			Fix:      fix,
+		})
+	}
+	return problems
+}
+
+// DoctorDiagnostic mirrors data.DoctorDiagnostic for use within gastown package.
+type DoctorDiagnostic struct {
+	Name        string   `json:"name"`
+	Status      string   `json:"status"`
+	Category    string   `json:"category"`
+	Explanation string   `json:"explanation"`
+	Commands    []string `json:"commands"`
 }

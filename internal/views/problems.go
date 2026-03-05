@@ -143,25 +143,40 @@ func (p Problems) renderProblem(idx int, prob gastown.Problem) []string {
 	}
 
 	typeLabel := strings.ToUpper(prob.Type)
-	agentLabel := fmt.Sprintf("%s %s", prob.Agent.Role, prob.Agent.Name)
 
 	prefix := "  "
 	if idx == p.cursor {
 		prefix = ui.ItemCursor.Render(ui.Cursor) + " "
 	}
 
-	// First line: severity + type + agent
+	// Context label: agent info for agent problems, category for doctor problems
+	contextLabel := ""
+	if prob.Type == "doctor" {
+		if prob.Category != "" {
+			contextLabel = prob.Category
+		}
+	} else {
+		contextLabel = fmt.Sprintf("%s %s", prob.Agent.Role, prob.Agent.Name)
+	}
+
+	// First line: severity + type + context
 	line1 := fmt.Sprintf("%s%s %s  %s",
 		prefix,
 		sevStyle.Render(sevSym+" "+sevLabel),
 		lipgloss.NewStyle().Foreground(ui.Light).Bold(true).Render(typeLabel),
-		lipgloss.NewStyle().Foreground(ui.Muted).Render(agentLabel),
+		lipgloss.NewStyle().Foreground(ui.Muted).Render(contextLabel),
 	)
 	lines = append(lines, line1)
 
 	// Second line: detail
 	detailStyle := lipgloss.NewStyle().Foreground(ui.Light)
 	lines = append(lines, "    "+detailStyle.Render(prob.Detail))
+
+	// Third line: fix command for doctor problems
+	if prob.Fix != "" {
+		fixStyle := lipgloss.NewStyle().Foreground(ui.Dim).Italic(true)
+		lines = append(lines, "    "+fixStyle.Render("fix: "+prob.Fix))
+	}
 
 	return lines
 }

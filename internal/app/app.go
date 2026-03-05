@@ -131,6 +131,9 @@ type Model struct {
 	// Metadata schema from .beads/config.yaml
 	metadataSchema *data.MetadataSchema
 
+	// Doctor diagnostics from bd doctor --agent --json (fetched at startup)
+	doctorProblems []gastown.Problem
+
 	// Shared terminal control-sequence guard (used by both the Bubble Tea
 	// filter and app-level deferred key handling).
 	oscGuard *OSCGuard
@@ -214,7 +217,7 @@ func (m Model) Init() tea.Cmd {
 		headerShimmerCmd(),
 	}
 	if m.sourceMode == data.SourceCLI {
-		cmds = append(cmds, fetchCurrentIssue)
+		cmds = append(cmds, fetchCurrentIssue, fetchDoctorDiagnostics)
 	}
 	return tea.Batch(cmds...)
 }
@@ -223,6 +226,12 @@ func (m Model) Init() tea.Cmd {
 func fetchCurrentIssue() tea.Msg {
 	id, _ := data.FetchCurrentIssueID()
 	return currentIssueMsg{issueID: id}
+}
+
+// fetchDoctorDiagnostics runs bd doctor --agent --json in the background.
+func fetchDoctorDiagnostics() tea.Msg {
+	result, _ := data.FetchDoctorDiagnostics()
+	return doctorResultMsg{result: result}
 }
 
 // startPoll returns the appropriate polling Cmd based on sourceMode.
@@ -239,6 +248,13 @@ func (m Model) startPollImmediate() tea.Cmd {
 		return data.FetchIssuesNow()
 	}
 	return data.WatchFile(m.watchPath, m.lastFileMod)
+}
+
+// allProblems returns the combined list of Gas Town agent problems and doctor diagnostics.
+func (m Model) allProblems() []gastown.Problem {
+	problems := gastown.DetectProblems(m.townStatus)
+	problems = append(problems, m.doctorProblems...)
+	return problems
 }
 
 // agentFinishedMsg is sent when a launched claude session exits.
@@ -393,6 +409,11 @@ type changeIndicatorExpiredMsg struct{}
 // currentIssueMsg carries the active issue ID from bd show --current at startup.
 type currentIssueMsg struct {
 	issueID string
+}
+
+// doctorResultMsg carries bd doctor --agent results from a background fetch.
+type doctorResultMsg struct {
+	result *data.DoctorResult
 }
 
 // gasTownTickMsg drives liveness animations (breathing dots, duration timers).
@@ -727,7 +748,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.recomputeVelocity()
 			}
 			if m.showProblems {
-				m.problems.SetProblems(gastown.DetectProblems(m.townStatus))
+				m.problems.SetProblems(m.allProblems())
 			}
 			// Check if selected issue now has an agent → fetch molecule
 			if cmd := m.maybeFetchMolecule(); cmd != nil {
@@ -1126,6 +1147,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case doctorResultMsg:
+		if msg.result == nil {
+			return m, nil
+		}
+		// Convert data.DoctorDiagnostic to gastown.DoctorDiagnostic
+		var diags []gastown.DoctorDiagnostic
+		for _, d := range msg.result.Diagnostics {
+			diags = append(diags, gastown.DoctorDiagnostic{
+				Name:        d.Name,
+				Status:      d.Status,
+				Category:    d.Category,
+				Explanation: d.Explanation,
+				Commands:    d.Commands,
+			})
+		}
+		m.doctorProblems = gastown.DoctorProblems(diags)
+		if m.showProblems {
+			m.problems.SetProblems(m.allProblems())
+		}
+		return m, nil
+
 	case agentFinishedMsg:
 		// Reset lastFileMod to force reload on next poll cycle.
 		m.lastFileMod = time.Time{}
@@ -1290,7 +1332,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.showProblems = !m.showProblems
 		if m.showProblems {
 			m.showGasTown = false
-			m.problems.SetProblems(gastown.DetectProblems(m.townStatus))
+			m.problems.SetProblems(m.allProblems())
 		}
 		return m, nil
 
@@ -2050,7 +2092,7 @@ func (m *Model) layout() {
 		AgentCount:       len(m.activeAgents),
 		TownStatus:       m.townStatus,
 		GasTownAvailable: m.gtEnv.Available,
-		ProblemCount:     len(gastown.DetectProblems(m.townStatus)),
+		ProblemCount:     len(m.allProblems()),
 		BeadOffset:       m.beadOffset,
 	}
 
@@ -2112,7 +2154,7 @@ func (m *Model) rebuildParade() {
 		AgentCount:       len(m.activeAgents),
 		TownStatus:       m.townStatus,
 		GasTownAvailable: m.gtEnv.Available,
-		ProblemCount:     len(gastown.DetectProblems(m.townStatus)),
+		ProblemCount:     len(m.allProblems()),
 		BeadOffset:       m.beadOffset,
 	}
 

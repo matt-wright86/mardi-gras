@@ -66,6 +66,43 @@ func FetchCurrentIssueID() (string, error) {
 	return result.ID, nil
 }
 
+// DoctorDiagnostic represents a single finding from `bd doctor --agent --json`.
+type DoctorDiagnostic struct {
+	Name        string   `json:"name"`
+	Status      string   `json:"status"`       // "error", "warning", "ok"
+	Severity    string   `json:"severity"`     // "blocking", "degraded", etc.
+	Category    string   `json:"category"`     // "Core System", "Git Integration", etc.
+	Explanation string   `json:"explanation"`  // Human-readable detail
+	Observed    string   `json:"observed"`     // What was found
+	Expected    string   `json:"expected"`     // What was expected
+	Commands    []string `json:"commands"`     // Suggested fix commands
+	SourceFiles []string `json:"source_files"` // Upstream source references
+}
+
+// DoctorResult holds the full output of `bd doctor --agent --json`.
+type DoctorResult struct {
+	OK          bool               `json:"overall_ok"`
+	Summary     string             `json:"summary"`
+	Diagnostics []DoctorDiagnostic `json:"diagnostics"`
+}
+
+// FetchDoctorDiagnostics runs `bd doctor --agent --json` and returns findings.
+// Only returns error/warning diagnostics (not passed checks).
+func FetchDoctorDiagnostics() (*DoctorResult, error) {
+	out, err := runWithTimeout(timeoutMedium, "bd", "doctor", "--agent", "--json")
+	if err != nil {
+		// bd doctor exits non-zero when problems found — still has valid JSON on stdout
+		if out == nil {
+			return nil, fmt.Errorf("bd doctor: %w", err)
+		}
+	}
+	var result DoctorResult
+	if err := json.Unmarshal(out, &result); err != nil {
+		return nil, fmt.Errorf("bd doctor parse: %w", err)
+	}
+	return &result, nil
+}
+
 // FetchIssuesNow returns a tea.Cmd that fetches issues via bd CLI immediately
 // (no timer delay). Emits FileChangedMsg on success, FileWatchErrorMsg on failure.
 func FetchIssuesNow() tea.Cmd {
