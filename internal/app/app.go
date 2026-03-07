@@ -118,6 +118,7 @@ type Model struct {
 
 	// Startup: issue ID from bd show --current, consumed after first parade build
 	pendingCurrentID string
+	currentIssueID   string // active issue shown in header
 
 	// Single-flight gate for gt status polls
 	gtPollInFlight bool
@@ -1153,6 +1154,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.issueID == "" {
 			return m, nil
 		}
+		m.currentIssueID = msg.issueID
 		if len(m.parade.Items) > 0 {
 			m.restoreParadeSelection(msg.issueID)
 			m.syncSelection()
@@ -1716,6 +1718,22 @@ func (m Model) closeSelectedIssue() (tea.Model, tea.Cmd) {
 	}
 }
 
+// cascadeCloseIssue runs gt close --cascade on the selected issue, closing it and all children.
+func (m Model) cascadeCloseIssue() (tea.Model, tea.Cmd) {
+	issue := m.parade.SelectedIssue
+	if issue == nil {
+		return m, nil
+	}
+	if issue.Status == data.StatusClosed {
+		return m, nil
+	}
+	issueID := issue.ID
+	return m, func() tea.Msg {
+		err := gastown.CascadeClose(issueID)
+		return mutateResultMsg{issueID: issueID, action: "cascade closed", err: err}
+	}
+}
+
 // setPriority runs bd update to change issue priority. Works on multi-selection if active.
 func (m Model) setPriority(priority data.Priority) (tea.Model, tea.Cmd) {
 	// Bulk mode
@@ -1833,6 +1851,7 @@ func (m Model) buildPaletteCommands() []components.PaletteCommand {
 			components.PaletteCommand{Name: "Sling with formula", Desc: "Pick formula and sling to polecat", Key: "s", Action: components.ActionSlingFormula},
 			components.PaletteCommand{Name: "Nudge agent", Desc: "Nudge agent with message", Key: "n", Action: components.ActionNudgeAgent},
 			components.PaletteCommand{Name: "Create convoy", Desc: "Create convoy from selected issues", Key: "C", Action: components.ActionCreateConvoy},
+			components.PaletteCommand{Name: "Cascade close", Desc: "Close issue and all children", Key: "", Action: components.ActionCascadeClose},
 		)
 	}
 
@@ -1905,6 +1924,8 @@ func (m Model) executePaletteAction(action components.PaletteAction) (tea.Model,
 		return m, nil
 	case components.ActionCreateConvoy:
 		return m.handleKey(tea.KeyPressMsg{Code: 'C', Text: "C"})
+	case components.ActionCascadeClose:
+		return m.cascadeCloseIssue()
 	case components.ActionHelp:
 		m.showHelp = true
 		return m, nil
@@ -2123,6 +2144,7 @@ func (m *Model) layout() {
 		GasTownAvailable: m.gtEnv.Available,
 		ProblemCount:     len(m.allProblems()),
 		BeadOffset:       m.beadOffset,
+		CurrentIssueID:   m.currentIssueID,
 	}
 
 	m.parade.SetSize(paradeW, bodyH)
@@ -2185,6 +2207,7 @@ func (m *Model) rebuildParade() {
 		GasTownAvailable: m.gtEnv.Available,
 		ProblemCount:     len(m.allProblems()),
 		BeadOffset:       m.beadOffset,
+		CurrentIssueID:   m.currentIssueID,
 	}
 
 	m.parade = views.NewParade(filteredIssues, paradeW, bodyH, m.blockingTypes)

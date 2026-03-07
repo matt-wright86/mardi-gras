@@ -91,3 +91,9 @@ func HandoffInTmux(target, projectDir string) (string, error) {
 func Decommission(address string) error {
 	return execWithTimeout(TimeoutShort, "gt", "polecat", "kill", address)
 }
+
+// CascadeClose closes an issue and all its children via `gt close --cascade`.
+// Requires Gas Town v0.11.0+.
+func CascadeClose(issueID string) error {
+	return execWithTimeout(TimeoutShort, "gt", "close", "--cascade", issueID)
+}

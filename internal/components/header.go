@@ -18,7 +18,8 @@ type Header struct {
 	TownStatus       *gastown.TownStatus
 	GasTownAvailable bool
 	ProblemCount     int
-	BeadOffset       int // shimmer animation offset, incremented by tick
+	BeadOffset       int    // shimmer animation offset, incremented by tick
+	CurrentIssueID   string // active issue from bd show --current
 }
 
 // View renders the header.
@@ -77,6 +78,12 @@ func (h Header) View() string {
 		gasTownInfo = gtStyle.Render(" " + strings.Join(parts, " "))
 	}
 
+	currentInfo := ""
+	if h.CurrentIssueID != "" {
+		currentStyle := lipgloss.NewStyle().Foreground(ui.BrightGold).Italic(true)
+		currentInfo = currentStyle.Render(fmt.Sprintf(" %s %s", ui.SymWorking, h.CurrentIssueID))
+	}
+
 	problemInfo := ""
 	if h.ProblemCount > 0 {
 		warnStyle := lipgloss.NewStyle().Foreground(ui.StatusStalled).Bold(true)
@@ -89,6 +96,7 @@ func (h Header) View() string {
 		lipgloss.Center,
 		title,
 		counts,
+		currentInfo,
 		agentInfo,
 		gasTownInfo,
 		problemInfo,

@@ -1,6 +1,8 @@
 package data
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestSourceLabelJSONL(t *testing.T) {
 	tests := []struct {
@@ -37,5 +39,37 @@ func TestSourceLabelJSONL(t *testing.T) {
 				t.Errorf("Source.Label() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestCheckBdVersionKnownBroken(t *testing.T) {
+	got := parseBdVersionWarning("bd version 0.59.0")
+	if got == "" {
+		t.Fatal("expected warning for v0.59.0, got empty string")
+	}
+	if got != "bd v0.59.0 has a known bug where --json is ignored; upgrade to v0.59.1+" {
+		t.Errorf("unexpected warning: %q", got)
+	}
+}
+
+func TestCheckBdVersionOK(t *testing.T) {
+	got := parseBdVersionWarning("bd version 0.58.0")
+	if got != "" {
+		t.Errorf("expected no warning for v0.58.0, got %q", got)
+	}
+}
+
+func TestCheckBdVersionUnparseable(t *testing.T) {
+	cases := []string{
+		"",
+		"garbled output here",
+		"bd",
+		"\x00\xff",
+	}
+	for _, input := range cases {
+		got := parseBdVersionWarning(input)
+		if got != "" {
+			t.Errorf("parseBdVersionWarning(%q) = %q, want empty", input, got)
+		}
 	}
 }

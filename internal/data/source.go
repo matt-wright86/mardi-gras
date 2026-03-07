@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -36,6 +37,40 @@ func (s Source) Label() string {
 	return "issues.jsonl"
 }
 
+// CheckBdVersion runs `bd --version` and returns a warning if the installed
+// version is known to be broken. Returns "" for any safe or unparseable version.
+func CheckBdVersion() string {
+	return checkBdVersionOutput(nil)
+}
+
+// checkBdVersionOutput parses version output. If out is nil, it shells out to bd.
+func checkBdVersionOutput(out []byte) string {
+	if out == nil {
+		var err error
+		out, err = runWithTimeout(timeoutShort, "bd", "--version")
+		if err != nil {
+			return ""
+		}
+	}
+	return parseBdVersionWarning(string(out))
+}
+
+// parseBdVersionWarning returns a warning string if the version is known-broken,
+// or "" otherwise. Accepts output like "bd version 0.59.0".
+func parseBdVersionWarning(output string) string {
+	// Expected format: "bd version X.Y.Z" (possibly with trailing newline)
+	fields := strings.Fields(strings.TrimSpace(output))
+	if len(fields) < 2 {
+		return ""
+	}
+	// Version is the last field (handles "bd version 0.59.0" and "0.59.0")
+	ver := fields[len(fields)-1]
+	if ver == "0.59.0" {
+		return "bd v0.59.0 has a known bug where --json is ignored; upgrade to v0.59.1+"
+	}
+	return ""
+}
+
 // FetchIssuesCLI runs `bd list --json --limit 0 --all` and parses the result.
 func FetchIssuesCLI() ([]Issue, error) {
 	out, err := runWithTimeout(timeoutMedium, "bd", "list", "--json", "--limit", "0", "--all")
@@ -44,6 +79,11 @@ func FetchIssuesCLI() ([]Issue, error) {
 	}
 	var issues []Issue
 	if err := json.Unmarshal(out, &issues); err != nil {
+		// Check if bd returned tree-formatted text instead of JSON
+		trimmed := strings.TrimSpace(string(out))
+		if trimmed != "" && !strings.HasPrefix(trimmed, "[") && !strings.HasPrefix(trimmed, "{") {
+			return nil, fmt.Errorf("bd list returned non-JSON output (tree format?) — bd v0.59.0 has a known bug, upgrade to v0.59.1+")
+		}
 		return nil, fmt.Errorf("bd list parse: %w", err)
 	}
 	SortIssues(issues)

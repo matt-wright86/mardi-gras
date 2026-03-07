@@ -801,17 +801,39 @@ func (g *GasTown) renderConvoyDetails(width int) string {
 			prefix = ui.ItemCursor.Render(ui.Cursor+" ") + ""
 		}
 
-		titleLine := fmt.Sprintf("%s%s %s  %s  %d/%d",
+		// Count label: use server-computed ProgressPct if available
+		countLabel := fmt.Sprintf("%d/%d", c.Completed, c.Total)
+		if c.ProgressPct > 0 {
+			countLabel = fmt.Sprintf("%d/%d (%.0f%%)", c.Completed, c.Total, c.ProgressPct)
+		}
+
+		titleLine := fmt.Sprintf("%s%s %s  %s  %s",
 			prefix,
 			lipgloss.NewStyle().Foreground(ui.Dim).Render(expandSym),
 			ui.GasTownValue.Render(truncateGT(c.Title, width-20)),
 			statusStyle.Render("["+c.Status+"]"),
-			c.Completed, c.Total)
+			countLabel)
 
 		if isSelected {
 			titleLine = ui.GasTownAgentSelected.Width(width).Render(titleLine)
 		}
 		lines = append(lines, titleLine)
+
+		// Ready/active counts + assignees (from gt v0.11.0+)
+		if c.ReadyCount > 0 || c.ActiveCount > 0 || len(c.Assignees) > 0 {
+			dimStyle := lipgloss.NewStyle().Foreground(ui.Dim)
+			var chips []string
+			if c.ReadyCount > 0 {
+				chips = append(chips, fmt.Sprintf("%d ready", c.ReadyCount))
+			}
+			if c.ActiveCount > 0 {
+				chips = append(chips, fmt.Sprintf("%d active", c.ActiveCount))
+			}
+			if len(c.Assignees) > 0 {
+				chips = append(chips, strings.Join(c.Assignees, ", "))
+			}
+			lines = append(lines, dimStyle.Render("    "+strings.Join(chips, "  ")))
+		}
 
 		// Progress bar + ETA prediction
 		barWidth := max(width-16, 10)

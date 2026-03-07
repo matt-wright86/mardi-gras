@@ -7,14 +7,18 @@ import (
 
 // ConvoyDetail is the rich convoy info from `gt convoy list --json` or `gt convoy status --json`.
 type ConvoyDetail struct {
-	ID        string             `json:"id"`
-	Title     string             `json:"title"`
-	Status    string             `json:"status"`
-	Owned     bool               `json:"owned,omitempty"`
-	Merge     string             `json:"merge_strategy,omitempty"`
-	Tracked   []TrackedIssueInfo `json:"tracked"`
-	Completed int                `json:"completed"`
-	Total     int                `json:"total"`
+	ID          string             `json:"id"`
+	Title       string             `json:"title"`
+	Status      string             `json:"status"`
+	Owned       bool               `json:"owned,omitempty"`
+	Merge       string             `json:"merge_strategy,omitempty"`
+	Tracked     []TrackedIssueInfo `json:"tracked"`
+	Completed   int                `json:"completed"`
+	Total       int                `json:"total"`
+	ProgressPct float64            `json:"progress_pct,omitempty"`
+	ReadyCount  int                `json:"ready_count,omitempty"`
+	ActiveCount int                `json:"active_count,omitempty"`
+	Assignees   []string           `json:"assignees,omitempty"`
 }
 
 // TrackedIssueInfo represents an issue tracked by a convoy.
