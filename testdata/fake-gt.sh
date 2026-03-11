@@ -41,7 +41,13 @@ case "$1" in
       {"name":"witness","address":"mardi_gras/witness","session":"mg-witness",
        "role":"witness","has_work":false,"state":"idle"},
       {"name":"refinery","address":"mardi_gras/refinery","session":"mg-refinery",
-       "role":"refinery","has_work":false,"state":"idle"}
+       "role":"refinery","has_work":false,"state":"idle"},
+      {"name":"doctor","address":"mardi_gras/dog/doctor","session":"mg-dog-doctor",
+       "role":"dog","has_work":true,"state":"working","unread_mail":0,
+       "work_title":"Health check patrol","running":true,
+       "agent_info":"claude/haiku"},
+      {"name":"reaper","address":"mardi_gras/dog/reaper","session":"mg-dog-reaper",
+       "role":"dog","has_work":false,"state":"idle","unread_mail":0}
     ],
     "convoys": [
       {"id":"convoy-1","title":"Auth Feature Sprint","status":"rolling",

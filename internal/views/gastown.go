@@ -677,12 +677,15 @@ func (g *GasTown) renderAgentRoster(width int) string {
 		roleStyle := lipgloss.NewStyle().Foreground(ui.RoleColor(a.Role))
 		roleStr := roleStyle.Render(fmt.Sprintf("%-*s", roleW, a.Role))
 
-		// Name (with agent info tag)
+		// Name (with agent info tag and dog symbol)
 		nameStyle := lipgloss.NewStyle().Foreground(ui.Light)
 		if isSelected {
 			nameStyle = nameStyle.Bold(true).Foreground(ui.White)
 		}
 		name := a.Name
+		if a.Role == "dog" {
+			name = ui.SymDog + " " + name
+		}
 		if len(name) > nameW {
 			name = name[:nameW-1] + "…"
 		}

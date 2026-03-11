@@ -69,6 +69,7 @@ const (
 	SymPaused        = "⏸" // alias of SymDeferred — intentionally suspended
 	SymProgress      = "█"
 	SymProgressEmpty = "░"
+	SymDog           = "🐕"
 	SymTown          = "⛽"
 
 	// Problems
