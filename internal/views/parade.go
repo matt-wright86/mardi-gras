@@ -66,6 +66,24 @@ type Parade struct {
 func NewParade(issues []data.Issue, width, height int, blockingTypes map[string]bool) Parade {
 	groups := data.GroupByParade(issues, blockingTypes)
 	issueMap := data.BuildIssueMap(issues)
+	return NewParadeWithData(issues, groups, issueMap, width, height, blockingTypes)
+}
+
+// NewParadeWithData creates a parade view using precomputed grouping data.
+func NewParadeWithData(
+	issues []data.Issue,
+	groups map[data.ParadeStatus][]data.Issue,
+	issueMap map[string]*data.Issue,
+	width, height int,
+	blockingTypes map[string]bool,
+) Parade {
+	if groups == nil {
+		groups = data.GroupByParade(issues, blockingTypes)
+	}
+	if issueMap == nil {
+		issueMap = data.BuildIssueMap(issues)
+	}
+
 	p := Parade{
 		ShowClosed:    false,
 		Width:         width,
@@ -277,7 +295,11 @@ func (p *Parade) View() string {
 		case item.IsFooter:
 			lines = append(lines, p.renderBorderBottom(item.Section))
 		default:
-			lines = append(lines, p.renderIssue(item, globalIdx == p.Cursor))
+			dist := globalIdx - p.Cursor
+			if dist < 0 {
+				dist = -dist
+			}
+			lines = append(lines, p.renderIssue(item, globalIdx == p.Cursor, dist))
 		}
 	}
 
@@ -305,12 +327,12 @@ func (p *Parade) renderBorderTop(sec paradeSection) string {
 		if p.ShowClosed {
 			toggle = ui.Expanded
 		}
-		titleText = fmt.Sprintf("%s %s %s (%d)", toggle, sec.Symbol, sec.Title, count)
+		titleText = fmt.Sprintf("%s %s %s%s", toggle, sec.Symbol, sec.Title, ui.Superscript(count))
 		if !p.ShowClosed {
 			titleText += " press c"
 		}
 	} else {
-		titleText = fmt.Sprintf("%s %s (%d)", sec.Symbol, sec.Title, count)
+		titleText = fmt.Sprintf("%s %s%s", sec.Symbol, sec.Title, ui.Superscript(count))
 	}
 
 	coloredTitle := sec.Style.Render(titleText)
@@ -359,7 +381,8 @@ func (p *Parade) renderBorderBottom(sec paradeSection) string {
 }
 
 // renderIssue renders an issue row wrapped in │ section borders.
-func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
+// distFromCursor controls positional fading (btop-style depth effect).
+func (p *Parade) renderIssue(item ParadeItem, selected bool, distFromCursor int) string {
 	issue := item.Issue
 	sec := item.Section
 	borderStyle := lipgloss.NewStyle().Foreground(sec.Color)
@@ -501,13 +524,18 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 		renderedTitle = titleStyle.Render(title)
 	}
 
+	// Age-based color for issue ID (fresh=green, aging=gold, stale=red)
+	ageDays := int(issue.Age().Hours() / 24)
+	agePct := min(ageDays*100/30, 100) // 30 days = fully stale
+	idStyle := ui.GradientHeat.At(agePct)
+
 	line := fmt.Sprintf("%s%s %s%s%s%s %s %s",
 		indent,
 		symStyle.Render(sym),
 		selectPrefix,
 		changePrefix,
 		agentPrefix,
-		issue.ID,
+		idStyle.Render(issue.ID),
 		renderedTitle,
 		prioStyle.Render(prio),
 	)
@@ -534,6 +562,12 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool) string {
 		row += strings.Repeat(" ", padLen)
 	}
 	content := ansi.Truncate(row, innerWidth, "")
+
+	// Positional fade: items far from cursor get dimmed (btop-style depth)
+	if distFromCursor > 6 {
+		content = lipgloss.NewStyle().Faint(true).Render(content)
+	}
+
 	return leftBorder + " " + content + " " + rightBorder
 }
 

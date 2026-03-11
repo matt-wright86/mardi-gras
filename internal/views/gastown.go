@@ -1397,19 +1397,13 @@ func (g *GasTown) renderHints() string {
 	return "\n" + ui.GasTownHint.Render(hint)
 }
 
-// progressBar renders a unicode block progress bar with Mardi Gras gradient.
+// progressBar renders a unicode block progress bar with per-block gradient coloring.
 func progressBar(done, total, width int) string {
 	if total <= 0 || width <= 0 {
 		return strings.Repeat(ui.SymProgressEmpty, width)
 	}
-	filled := max(min(done*width/total, width), 0)
-	empty := width - filled
-
-	emptyStyle := lipgloss.NewStyle().Foreground(ui.Dim)
-
-	filledStr := strings.Repeat(ui.SymProgress, filled)
-	return ui.ApplyPartialMardiGrasGradient(filledStr, width) +
-		emptyStyle.Render(strings.Repeat(ui.SymProgressEmpty, empty))
+	pct := float64(done) * 100.0 / float64(total)
+	return ui.GradientBar(pct, width, ui.GradientProgress)
 }
 
 // truncateGT truncates a string for the Gas Town panel.

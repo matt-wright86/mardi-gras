@@ -3,8 +3,10 @@ package gastown
 import (
 	"bufio"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -17,6 +19,18 @@ type Event struct {
 	Payload    json.RawMessage `json:"payload"`
 	Visibility string          `json:"visibility"`
 }
+
+type recentEventCache struct {
+	mu      sync.Mutex
+	path    string
+	limit   int
+	size    int64
+	modTime time.Time
+	ring    []Event
+	count   int
+}
+
+var cachedRecentEvents recentEventCache
 
 // EventsPath returns the path to the Gas Town events log.
 // Uses GT_HOME if set, otherwise defaults to ~/gt/.events.jsonl.
@@ -37,24 +51,104 @@ func EventsPath() string {
 // Uses a ring buffer so memory usage is O(limit), not O(file_size).
 // Returns nil, nil if the file does not exist or is empty.
 func LoadRecentEvents(path string, limit int) ([]Event, error) {
-	f, err := os.Open(path)
+	if limit <= 0 || path == "" {
+		return nil, nil
+	}
+
+	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	defer f.Close()
 
-	if limit <= 0 {
-		return nil, nil
+	cachedRecentEvents.mu.Lock()
+	defer cachedRecentEvents.mu.Unlock()
+
+	if cachedRecentEvents.canReuse(path, limit, info) {
+		return materializeRecentEvents(cachedRecentEvents.ring, cachedRecentEvents.count, limit), nil
 	}
 
+	if cachedRecentEvents.canAppend(path, limit, info) {
+		if err := cachedRecentEvents.append(path, info); err == nil {
+			return materializeRecentEvents(cachedRecentEvents.ring, cachedRecentEvents.count, limit), nil
+		}
+	}
+
+	ring, count, err := loadRecentEventRing(path, limit)
+	if err != nil {
+		return nil, err
+	}
+	cachedRecentEvents.store(path, limit, info, ring, count)
+	return materializeRecentEvents(ring, count, limit), nil
+}
+
+func (c *recentEventCache) canReuse(path string, limit int, info os.FileInfo) bool {
+	return c.path == path &&
+		c.limit == limit &&
+		c.size == info.Size() &&
+		c.modTime.Equal(info.ModTime())
+}
+
+func (c *recentEventCache) canAppend(path string, limit int, info os.FileInfo) bool {
+	return c.path == path &&
+		c.limit == limit &&
+		c.size >= 0 &&
+		info.Size() > c.size &&
+		len(c.ring) == limit
+}
+
+func (c *recentEventCache) append(path string, info os.FileInfo) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if _, err := f.Seek(c.size, io.SeekStart); err != nil {
+		return err
+	}
+
+	count, err := scanRecentEvents(f, c.ring, c.count)
+	if err != nil {
+		return err
+	}
+	c.count = count
+	c.size = info.Size()
+	c.modTime = info.ModTime()
+	return nil
+}
+
+func (c *recentEventCache) store(path string, limit int, info os.FileInfo, ring []Event, count int) {
+	c.path = path
+	c.limit = limit
+	c.size = info.Size()
+	c.modTime = info.ModTime()
+	c.ring = ring
+	c.count = count
+}
+
+func loadRecentEventRing(path string, limit int) ([]Event, int, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer f.Close()
+
 	ring := make([]Event, limit)
-	count := 0
-	scanner := bufio.NewScanner(f)
+	count, err := scanRecentEvents(f, ring, 0)
+	if err != nil {
+		return nil, 0, err
+	}
+	return ring, count, nil
+}
+
+func scanRecentEvents(r io.Reader, ring []Event, count int) (int, error) {
+	scanner := bufio.NewScanner(r)
 	// Allow long lines (some payloads can be large)
 	scanner.Buffer(make([]byte, 0, 64*1024), 256*1024)
+	limit := len(ring)
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if len(line) == 0 {
@@ -62,27 +156,29 @@ func LoadRecentEvents(path string, limit int) ([]Event, error) {
 		}
 		var ev Event
 		if err := json.Unmarshal(line, &ev); err != nil {
-			continue // skip malformed lines
+			continue
 		}
 		ring[count%limit] = ev
 		count++
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return count, err
 	}
+	return count, nil
+}
 
+func materializeRecentEvents(ring []Event, count, limit int) []Event {
 	if count == 0 {
-		return nil, nil
+		return nil
 	}
 
-	// Extract in order, then reverse to newest-first
 	n := min(count, limit)
 	result := make([]Event, n)
 	start := count - n
 	for i := 0; i < n; i++ {
 		result[n-1-i] = ring[(start+i)%limit]
 	}
-	return result, nil
+	return result
 }
 
 // AgentActivityHistogram builds a per-agent event count histogram from recent events.

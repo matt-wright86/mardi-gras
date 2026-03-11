@@ -93,6 +93,92 @@ func ApplyShimmerGradient(text string, offset float64) string {
 	return b.String()
 }
 
+// Gradient is a pre-computed array of 101 styles (0-100%) for smooth color transitions.
+type Gradient [101]lipgloss.Style
+
+// NewGradient creates a 3-point gradient: start (0%) → mid (50%) → end (100%).
+// Uses Luv color space blending for perceptually uniform transitions.
+func NewGradient(start, mid, end color.Color) Gradient {
+	s := toColorful(start)
+	m := toColorful(mid)
+	e := toColorful(end)
+	var g Gradient
+	for i := range 101 {
+		var c colorful.Color
+		if i <= 50 {
+			c = s.BlendLuv(m, float64(i)/50.0)
+		} else {
+			c = m.BlendLuv(e, float64(i-50)/50.0)
+		}
+		g[i] = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Hex()))
+	}
+	return g
+}
+
+// NewGradient2 creates a 2-point gradient: start (0%) → end (100%).
+func NewGradient2(start, end color.Color) Gradient {
+	s := toColorful(start)
+	e := toColorful(end)
+	var g Gradient
+	for i := range 101 {
+		c := s.BlendLuv(e, float64(i)/100.0)
+		g[i] = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Hex()))
+	}
+	return g
+}
+
+// At returns the style at the given percentage (clamped to 0-100).
+func (g Gradient) At(pct int) lipgloss.Style {
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	return g[pct]
+}
+
+// GradientBar renders a progress bar where each filled block is colored
+// by its position along the gradient. Unfilled portion uses dim blocks.
+func GradientBar(pct float64, width int, g Gradient) string {
+	if width <= 0 {
+		return ""
+	}
+	filled := int(pct * float64(width) / 100.0)
+	if filled > width {
+		filled = width
+	}
+	if filled < 0 {
+		filled = 0
+	}
+
+	dimStyle := lipgloss.NewStyle().Foreground(Dim)
+	var b strings.Builder
+	for i := range filled {
+		step := i * 100 / width
+		b.WriteString(g.At(step).Render("█"))
+	}
+	for range width - filled {
+		b.WriteString(dimStyle.Render("░"))
+	}
+	return b.String()
+}
+
+// Pre-built gradients for common use cases.
+var (
+	// GradientProgress: green → gold → red (for progress bars, budgets).
+	GradientProgress = NewGradient(BrightGreen, BrightGold, lipgloss.Color("#E74C3C"))
+
+	// GradientHeat: green → orange → red (for age/staleness).
+	GradientHeat = NewGradient(BrightGreen, lipgloss.Color("#E67E22"), lipgloss.Color("#E74C3C"))
+
+	// GradientPurpleGold: purple → gold (Mardi Gras themed, for selection proximity).
+	GradientPurpleGold = NewGradient2(DimPurple, BrightGold)
+
+	// GradientFade: bright → dim (for list item positional fading).
+	GradientFade = NewGradient2(White, Dim)
+)
+
 // ApplyPartialMardiGrasGradient applies the gradient as if the text was `totalLength` characters long,
 // ensuring a partial progress bar maps to the correct segment of the full color spectrum.
 func ApplyPartialMardiGrasGradient(text string, totalLength int) string {

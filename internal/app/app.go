@@ -27,6 +27,16 @@ const (
 	PaneDetail
 )
 
+// LayoutPreset defines panel arrangement modes.
+type LayoutPreset int
+
+const (
+	LayoutDefault LayoutPreset = iota // parade + detail (2:3 split)
+	LayoutGasTown                     // parade + gas town
+	LayoutWide                        // full-width parade only
+	layoutPresetCount
+)
+
 const (
 	toastDuration           = 4 * time.Second
 	changeIndicatorDuration = 30 * time.Second
@@ -126,6 +136,9 @@ type Model struct {
 
 	// Gas Town panel liveness tick
 	gasTownTicking bool
+
+	// Layout preset (cycle with command palette)
+	layoutPreset LayoutPreset
 
 	// Bead string shimmer animation
 	beadOffset int
@@ -251,6 +264,31 @@ func (m Model) startPollImmediate() tea.Cmd {
 		return data.FetchIssuesNow()
 	}
 	return data.WatchFile(m.watchPath, m.lastFileMod)
+}
+
+// activateGasTown shows the Gas Town panel and schedules its data refreshes.
+func (m *Model) activateGasTown() tea.Cmd {
+	if !m.gtEnv.Available {
+		return nil
+	}
+
+	m.showGasTown = true
+	m.showProblems = false
+	m.gasTown.SetStatus(m.townStatus, m.gtEnv)
+
+	cmds := []tea.Cmd{
+		fetchConvoyList,
+		fetchMailInbox,
+		fetchCosts,
+		fetchActivity,
+		fetchVitals,
+		m.gatedPollAgentState(),
+	}
+	if !m.gasTownTicking {
+		cmds = append(cmds, gasTownTickCmd())
+		m.gasTownTicking = true
+	}
+	return tea.Batch(cmds...)
 }
 
 // allProblems returns the combined list of Gas Town agent problems and doctor diagnostics.
@@ -1329,17 +1367,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		m.showGasTown = !m.showGasTown
 		if m.showGasTown {
-			m.showProblems = false
-			m.gasTown.SetStatus(m.townStatus, m.gtEnv)
-			cmds := []tea.Cmd{fetchConvoyList, fetchMailInbox, fetchCosts, fetchActivity, fetchVitals}
-			if m.townStatus == nil {
-				cmds = append(cmds, m.gatedPollAgentState())
-			}
-			if !m.gasTownTicking {
-				cmds = append(cmds, gasTownTickCmd())
-				m.gasTownTicking = true
-			}
-			return m, tea.Batch(cmds...)
+			cmd := m.activateGasTown()
+			return m, cmd
 		}
 		return m, nil
 
@@ -1811,13 +1840,21 @@ func (m Model) createAndSwitchBranch() (tea.Model, tea.Cmd) {
 	return m, func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		err := exec.CommandContext(ctx, "git", "checkout", "-b", branch).Run()
+		err := createBranchCmd(ctx, m.projectDir, branch).Run()
 		action := fmt.Sprintf("branch: %s", branch)
 		if err != nil {
 			return mutateResultMsg{issueID: issueCopy.ID, action: action, err: err}
 		}
 		return mutateResultMsg{issueID: issueCopy.ID, action: action}
 	}
+}
+
+func createBranchCmd(ctx context.Context, projectDir, branch string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "git", "checkout", "-b", branch)
+	if projectDir != "" {
+		cmd.Dir = projectDir
+	}
+	return cmd
 }
 
 // buildPaletteCommands returns the context-aware list of palette commands.
@@ -1838,6 +1875,7 @@ func (m Model) buildPaletteCommands() []components.PaletteCommand {
 		{Name: "Filter", Desc: "Fuzzy filter the parade list", Key: "/", Action: components.ActionFilter},
 		{Name: "Help", Desc: "Show keybinding help", Key: "?", Action: components.ActionHelp},
 		{Name: "Quit", Desc: "Exit Mardi Gras", Key: "q", Action: components.ActionQuit},
+		{Name: "Cycle layout", Desc: "Switch panel arrangement", Key: "", Action: components.ActionCycleLayout},
 	}
 
 	if m.agentAvail {
@@ -1917,17 +1955,31 @@ func (m Model) executePaletteAction(action components.PaletteAction) (tea.Model,
 		}
 		m.showGasTown = !m.showGasTown
 		if m.showGasTown {
-			m.gasTown.SetStatus(m.townStatus, m.gtEnv)
-			if !m.gasTownTicking {
-				m.gasTownTicking = true
-				return m, gasTownTickCmd()
-			}
+			cmd := m.activateGasTown()
+			return m, cmd
 		}
 		return m, nil
 	case components.ActionCreateConvoy:
 		return m.handleKey(tea.KeyPressMsg{Code: 'C', Text: "C"})
 	case components.ActionCascadeClose:
 		return m.cascadeCloseIssue()
+	case components.ActionCycleLayout:
+		m.layoutPreset = (m.layoutPreset + 1) % layoutPresetCount
+		labels := [...]string{"Default", "Gas Town", "Wide"}
+		// Auto-toggle gastown panel for the GasTown preset
+		switch m.layoutPreset {
+		case LayoutGasTown:
+			toast, cmd := components.ShowToast("Layout: "+labels[m.layoutPreset], components.ToastInfo, toastDuration)
+			m.toast = toast
+			m.layout()
+			return m, tea.Batch(cmd, m.activateGasTown())
+		case LayoutDefault:
+			m.showGasTown = false
+		}
+		toast, cmd := components.ShowToast("Layout: "+labels[m.layoutPreset], components.ToastInfo, toastDuration)
+		m.toast = toast
+		m.layout()
+		return m, cmd
 	case components.ActionHelp:
 		m.showHelp = true
 		return m, nil
@@ -2077,7 +2129,9 @@ func (m *Model) diffIssues(newIssues []data.Issue) int {
 func (m *Model) syncSelection() {
 	if m.parade.SelectedIssue != nil {
 		m.detail.SetIssue(m.parade.SelectedIssue)
+		return
 	}
+	m.detail.SetIssue(nil)
 }
 
 // maybeFetchMolecule returns a Cmd to fetch molecule data if the selected issue
@@ -2132,11 +2186,18 @@ func (m *Model) layout() {
 		bodyH = 1
 	}
 
-	paradeW := m.width * 2 / 5
-	if paradeW < 30 {
-		paradeW = 30
+	var paradeW, detailW int
+	switch m.layoutPreset {
+	case LayoutWide:
+		paradeW = m.width
+		detailW = 0
+	default:
+		paradeW = m.width * 2 / 5
+		if paradeW < 30 {
+			paradeW = 30
+		}
+		detailW = m.width - paradeW
 	}
-	detailW := m.width - paradeW
 
 	m.header = components.Header{
 		Width:            m.width,
@@ -2154,12 +2215,13 @@ func (m *Model) layout() {
 	m.gasTown.SetSize(detailW, bodyH)
 	m.problems.SetSize(detailW, bodyH)
 	m.detail.AllIssues = m.issues
-	m.detail.IssueMap = data.BuildIssueMap(m.issues)
+	detailIssueMap := data.BuildIssueMap(m.issues)
+	m.detail.IssueMap = detailIssueMap
 	m.detail.BlockingTypes = m.blockingTypes
 	m.detail.MetadataSchema = m.metadataSchema
 
 	if len(m.parade.Items) == 0 {
-		m.parade = views.NewParade(m.issues, paradeW, bodyH, m.blockingTypes)
+		m.parade = views.NewParadeWithData(m.issues, m.groups, detailIssueMap, paradeW, bodyH, m.blockingTypes)
 		m.syncSelection()
 		if m.pendingCurrentID != "" {
 			m.restoreParadeSelection(m.pendingCurrentID)
@@ -2197,8 +2259,11 @@ func (m *Model) rebuildParade() {
 		filteredIssues = data.FocusFilter(filteredIssues, m.blockingTypes)
 	}
 	groups := m.groups
+	detailIssueMap := data.BuildIssueMap(m.issues)
+	paradeIssueMap := detailIssueMap
 	if m.filterInput.Value() != "" || m.focusMode {
 		groups = data.GroupByParade(filteredIssues, m.blockingTypes)
+		paradeIssueMap = data.BuildIssueMap(filteredIssues)
 	}
 
 	m.header = components.Header{
@@ -2212,7 +2277,7 @@ func (m *Model) rebuildParade() {
 		CurrentIssueID:   m.currentIssueID,
 	}
 
-	m.parade = views.NewParade(filteredIssues, paradeW, bodyH, m.blockingTypes)
+	m.parade = views.NewParadeWithData(filteredIssues, groups, paradeIssueMap, paradeW, bodyH, m.blockingTypes)
 	m.parade.MatchHighlights = highlights
 	if oldShowClosed {
 		m.parade.ToggleClosed()
@@ -2223,7 +2288,7 @@ func (m *Model) rebuildParade() {
 	m.parade.ChangedIDs = m.changedIDs
 
 	m.detail.AllIssues = m.issues
-	m.detail.IssueMap = data.BuildIssueMap(m.issues)
+	m.detail.IssueMap = detailIssueMap
 	m.detail.BlockingTypes = m.blockingTypes
 	m.propagateAgentState()
 	m.syncSelection()
@@ -2412,18 +2477,22 @@ func (m Model) View() tea.View {
 
 	header := m.header.View()
 
-	rightPanel := m.detail.View()
-	if m.showProblems && m.gtEnv.Available {
-		rightPanel = m.problems.View()
-	} else if m.showGasTown && m.gtEnv.Available {
-		rightPanel = m.gasTown.View()
+	var body string
+	if m.layoutPreset == LayoutWide {
+		body = m.parade.View()
+	} else {
+		rightPanel := m.detail.View()
+		if m.showProblems && m.gtEnv.Available {
+			rightPanel = m.problems.View()
+		} else if m.showGasTown && m.gtEnv.Available {
+			rightPanel = m.gasTown.View()
+		}
+		body = lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			m.parade.View(),
+			rightPanel,
+		)
 	}
-
-	body := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		m.parade.View(),
-		rightPanel,
-	)
 
 	inputBarStyle := lipgloss.NewStyle().Padding(0, 1).Width(m.width)
 	var bottomBar string

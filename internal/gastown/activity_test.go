@@ -95,6 +95,49 @@ func TestEventParsingMissingFile(t *testing.T) {
 	}
 }
 
+func TestLoadRecentEventsTracksAppends(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "events.jsonl")
+	initial := `{"ts":"1","source":"gt","type":"a","actor":"x","visibility":"feed"}
+{"ts":"2","source":"gt","type":"b","actor":"x","visibility":"feed"}
+`
+	if err := os.WriteFile(path, []byte(initial), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	events, err := LoadRecentEvents(path, 2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) != 2 || events[0].Type != "b" || events[1].Type != "a" {
+		t.Fatalf("unexpected initial events: %+v", events)
+	}
+
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(`{"ts":"3","source":"gt","type":"c","actor":"x","visibility":"feed"}
+`); err != nil {
+		_ = f.Close()
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	events, err = LoadRecentEvents(path, 2)
+	if err != nil {
+		t.Fatalf("unexpected error after append: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events after append, got %d", len(events))
+	}
+	if events[0].Type != "c" || events[1].Type != "b" {
+		t.Fatalf("expected newest events [c b], got [%s %s]", events[0].Type, events[1].Type)
+	}
+}
+
 func TestEventsPath(t *testing.T) {
 	// With GT_HOME set
 	t.Setenv("GT_HOME", "/tmp/mygt")

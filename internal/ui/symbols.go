@@ -1,5 +1,10 @@
 package ui
 
+import (
+	"fmt"
+	"strings"
+)
+
 // Unicode symbols for the Mardi Gras theme.
 const (
 	FleurDeLis = "⚜"
@@ -97,3 +102,21 @@ const (
 	SymEphemeral = "◇"
 	SymValidator = "⚖"
 )
+
+// superscriptDigits maps 0-9 to their Unicode superscript equivalents.
+var superscriptDigits = [10]string{"⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"}
+
+// Superscript converts a non-negative integer to superscript Unicode digits.
+func Superscript(n int) string {
+	if n < 0 {
+		n = 0
+	}
+	if n < 10 {
+		return superscriptDigits[n]
+	}
+	var b strings.Builder
+	for _, d := range fmt.Appendf(nil, "%d", n) {
+		b.WriteString(superscriptDigits[d-'0'])
+	}
+	return b.String()
+}

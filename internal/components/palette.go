@@ -38,6 +38,7 @@ const (
 	ActionToggleGasTown
 	ActionCreateConvoy
 	ActionCascadeClose
+	ActionCycleLayout
 )
 
 // PaletteCommand is a single entry in the command palette.
