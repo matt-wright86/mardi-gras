@@ -160,7 +160,8 @@ type Model struct {
     lastFileMod   time.Time          // last known modtime (JSONL only)
 
     // Agent integration
-    claudeAvail   bool
+    agentAvail    bool
+    agentRuntime  agent.Runtime
     activeAgents  map[string]string  // issueID -> tmux window name
     inTmux        bool
     projectDir    string

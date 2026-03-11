@@ -173,13 +173,32 @@ func TestCommandDir(t *testing.T) {
 		t.Errorf("expected Dir=%q, got %q", "/tmp/project", cmd.Dir)
 	}
 
-	if len(cmd.Args) != 2 {
-		t.Fatalf("expected 2 args, got %d: %v", len(cmd.Args), cmd.Args)
-	}
-	if cmd.Args[0] != "claude" {
-		t.Errorf("expected Args[0]=%q, got %q", "claude", cmd.Args[0])
-	}
-	if cmd.Args[1] != "hello world" {
-		t.Errorf("expected Args[1]=%q, got %q", "hello world", cmd.Args[1])
+	rt := DetectRuntime()
+	switch rt {
+	case RuntimeClaude:
+		if len(cmd.Args) != 2 {
+			t.Fatalf("expected 2 args for claude, got %d: %v", len(cmd.Args), cmd.Args)
+		}
+		if cmd.Args[0] != "claude" {
+			t.Errorf("expected Args[0]=%q, got %q", "claude", cmd.Args[0])
+		}
+		if cmd.Args[1] != "hello world" {
+			t.Errorf("expected Args[1]=%q, got %q", "hello world", cmd.Args[1])
+		}
+	case RuntimeCursor:
+		if len(cmd.Args) != 4 {
+			t.Fatalf("expected 4 args for cursor-agent, got %d: %v", len(cmd.Args), cmd.Args)
+		}
+		if cmd.Args[0] != "cursor-agent" {
+			t.Errorf("expected Args[0]=%q, got %q", "cursor-agent", cmd.Args[0])
+		}
+		if cmd.Args[1] != "-f" || cmd.Args[2] != "-p" {
+			t.Errorf("expected [-f -p] flags, got %v", cmd.Args[1:3])
+		}
+		if cmd.Args[3] != "hello world" {
+			t.Errorf("expected Args[3]=%q, got %q", "hello world", cmd.Args[3])
+		}
+	default:
+		t.Skip("no agent runtime on PATH")
 	}
 }

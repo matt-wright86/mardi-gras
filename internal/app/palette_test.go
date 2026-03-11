@@ -154,17 +154,17 @@ func TestBuildPaletteCommandsConditional(t *testing.T) {
 	got := initModel(t)
 
 	t.Run("no agent commands when unavailable", func(t *testing.T) {
-		got.claudeAvail = false
+		got.agentAvail = false
 		cmds := got.buildPaletteCommands()
 		for _, cmd := range cmds {
 			if cmd.Action == components.ActionLaunchAgent || cmd.Action == components.ActionKillAgent {
-				t.Errorf("unexpected agent action %d when claudeAvail=false", cmd.Action)
+				t.Errorf("unexpected agent action %d when agentAvail=false", cmd.Action)
 			}
 		}
 	})
 
 	t.Run("agent commands when available", func(t *testing.T) {
-		got.claudeAvail = true
+		got.agentAvail = true
 		cmds := got.buildPaletteCommands()
 		foundLaunch := false
 		foundKill := false
@@ -177,10 +177,10 @@ func TestBuildPaletteCommandsConditional(t *testing.T) {
 			}
 		}
 		if !foundLaunch {
-			t.Error("expected ActionLaunchAgent when claudeAvail=true")
+			t.Error("expected ActionLaunchAgent when agentAvail=true")
 		}
 		if !foundKill {
-			t.Error("expected ActionKillAgent when claudeAvail=true")
+			t.Error("expected ActionKillAgent when agentAvail=true")
 		}
 	})
 }

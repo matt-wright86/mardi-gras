@@ -118,8 +118,7 @@ func TestPredictCostBudgetNilCosts(t *testing.T) {
 }
 
 func TestAgentProductivity(t *testing.T) {
-	now := time.Now()
-	closedAt := now.Add(-1 * time.Hour)
+	closedAt := time.Now()
 	issues := []data.Issue{
 		{ID: "a", Status: data.StatusClosed, ClosedAt: &closedAt},
 		{ID: "b", Status: data.StatusClosed, ClosedAt: &closedAt},

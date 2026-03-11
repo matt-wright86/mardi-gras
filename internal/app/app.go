@@ -50,7 +50,8 @@ type Model struct {
 	filtering     bool
 	showHelp      bool
 	ready         bool
-	claudeAvail   bool
+	agentAvail    bool
+	agentRuntime  agent.Runtime
 	projectDir    string
 	inTmux        bool
 	activeAgents  map[string]string   // issueID -> tmux window name
@@ -187,7 +188,8 @@ func NewWithGuard(issues []data.Issue, source data.Source, blockingTypes map[str
 		lastFileMod:    lastFileMod,
 		blockingTypes:  blockingTypes,
 		filterInput:    ti,
-		claudeAvail:    agent.Available(),
+		agentAvail:     agent.Available(),
+		agentRuntime:   agent.DetectRuntime(),
 		projectDir:     projectDir,
 		inTmux:         agent.InTmux() && agent.TmuxAvailable(),
 		activeAgents:   make(map[string]string),
@@ -1396,7 +1398,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 
 		issue := m.parade.SelectedIssue
-		if issue == nil || !m.claudeAvail {
+		if issue == nil || !m.agentAvail {
 			return m, nil
 		}
 		if _, active := m.activeAgents[issue.ID]; active && m.inTmux {
@@ -1838,9 +1840,9 @@ func (m Model) buildPaletteCommands() []components.PaletteCommand {
 		{Name: "Quit", Desc: "Exit Mardi Gras", Key: "q", Action: components.ActionQuit},
 	}
 
-	if m.claudeAvail {
+	if m.agentAvail {
 		cmds = append(cmds,
-			components.PaletteCommand{Name: "Launch agent", Desc: "Start Claude agent on issue", Key: "a", Action: components.ActionLaunchAgent},
+			components.PaletteCommand{Name: "Launch agent", Desc: fmt.Sprintf("Start %s agent on issue", m.agentRuntime.RuntimeLabel()), Key: "a", Action: components.ActionLaunchAgent},
 			components.PaletteCommand{Name: "Kill agent", Desc: "Stop agent working on issue", Key: "A", Action: components.ActionKillAgent},
 		)
 	}

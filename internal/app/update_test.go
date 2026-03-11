@@ -213,7 +213,7 @@ func TestBuildPaletteCommandsGasTown(t *testing.T) {
 
 	// Baseline without Gas Town.
 	got.gtEnv.Available = false
-	got.claudeAvail = false
+	got.agentAvail = false
 	baseCmds := got.buildPaletteCommands()
 	baseLen := len(baseCmds)
 
