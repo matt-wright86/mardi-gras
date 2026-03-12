@@ -104,3 +104,4 @@ The workflow runs `goreleaser` which builds binaries for linux/darwin/windows (a
 - Create feature branches off `main` — the `main` branch is protected.
 - Commit messages: imperative mood, describe the "why". Prefix with `feat:`, `fix:`, `docs:`, `chore:`, `test:` as appropriate.
 - Do not push unless explicitly asked.
+- **Never commit files under `docs/internal/`** — this directory is gitignored and is for local-only working docs (audit reports, upstream checks, design plans). Do not use `git add -f` to force-add these files.
