@@ -179,6 +179,15 @@ func (d *Detail) renderContent() string {
 	typeColor := ui.IssueTypeColor(string(issue.IssueType))
 	lines = append(lines, d.row("Type:", lipgloss.NewStyle().Foreground(typeColor).Render(string(issue.IssueType))))
 
+	if progress, ok := d.epicProgress(issue); ok {
+		progressStyle := lipgloss.NewStyle().Foreground(ui.BrightGold).Bold(true)
+		if progress.Done == progress.Total {
+			progressStyle = lipgloss.NewStyle().Foreground(ui.BrightGreen).Bold(true)
+		}
+		lines = append(lines, d.row("Progress:", progressStyle.Render(progress.Label())))
+		lines = append(lines, "  "+moleculeProgressBar(progress.Done, progress.Total, max(d.Width-16, 10)))
+	}
+
 	// Priority
 	prioColor := ui.PriorityColor(int(issue.Priority))
 	prioLabel := fmt.Sprintf("%s (%s)", data.PriorityLabel(issue.Priority), data.PriorityName(issue.Priority))
@@ -822,6 +831,43 @@ func formatTime(t time.Time) string {
 
 func (d *Detail) row(label, value string) string {
 	return ui.DetailLabel.Render(label) + " " + value
+}
+
+type issueProgress struct {
+	Done  int
+	Total int
+}
+
+func (p issueProgress) Percent() int {
+	if p.Total <= 0 {
+		return 0
+	}
+	return p.Done * 100 / p.Total
+}
+
+func (p issueProgress) Label() string {
+	return fmt.Sprintf("%d/%d (%d%%)", p.Done, p.Total, p.Percent())
+}
+
+func (d *Detail) epicProgress(issue *data.Issue) (issueProgress, bool) {
+	if issue == nil || issue.IssueType != data.TypeEpic {
+		return issueProgress{}, false
+	}
+
+	progress := issueProgress{}
+	for _, candidate := range d.AllIssues {
+		if candidate.ParentID() != issue.ID {
+			continue
+		}
+		progress.Total++
+		if candidate.Status == data.StatusClosed {
+			progress.Done++
+		}
+	}
+	if progress.Total == 0 {
+		return issueProgress{}, false
+	}
+	return progress, true
 }
 
 func paradeLabel(issue *data.Issue, issueMap map[string]*data.Issue, blockingTypes map[string]bool) string {

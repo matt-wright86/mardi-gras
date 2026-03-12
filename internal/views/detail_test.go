@@ -125,6 +125,46 @@ func TestSetSizeUpdatesDimensions(t *testing.T) {
 	}
 }
 
+func TestEpicProgressUsesDirectChildren(t *testing.T) {
+	issues := []data.Issue{
+		{ID: "mg-100", Title: "Platform migration", Status: data.StatusOpen, Priority: data.PriorityHigh, IssueType: data.TypeEpic, CreatedAt: time.Now()},
+		{ID: "mg-100.1", Title: "Auth", Status: data.StatusClosed, Priority: data.PriorityMedium, IssueType: data.TypeTask, CreatedAt: time.Now()},
+		{ID: "mg-100.2", Title: "Billing", Status: data.StatusOpen, Priority: data.PriorityMedium, IssueType: data.TypeTask, CreatedAt: time.Now()},
+		{ID: "mg-100.2.1", Title: "Billing schema", Status: data.StatusClosed, Priority: data.PriorityLow, IssueType: data.TypeTask, CreatedAt: time.Now()},
+	}
+
+	d := NewDetail(80, 30, issues)
+	progress, ok := d.epicProgress(&issues[0])
+	if !ok {
+		t.Fatal("expected epic progress to be available")
+	}
+	if progress.Done != 1 || progress.Total != 2 {
+		t.Fatalf("epicProgress() = %+v, want done=1 total=2", progress)
+	}
+	if progress.Label() != "1/2 (50%)" {
+		t.Fatalf("progress.Label() = %q, want %q", progress.Label(), "1/2 (50%)")
+	}
+}
+
+func TestEpicProgressRenderingInContent(t *testing.T) {
+	issues := []data.Issue{
+		{ID: "mg-100", Title: "Platform migration", Status: data.StatusOpen, Priority: data.PriorityHigh, IssueType: data.TypeEpic, CreatedAt: time.Now()},
+		{ID: "mg-100.1", Title: "Auth", Status: data.StatusClosed, Priority: data.PriorityMedium, IssueType: data.TypeTask, CreatedAt: time.Now()},
+		{ID: "mg-100.2", Title: "Billing", Status: data.StatusOpen, Priority: data.PriorityMedium, IssueType: data.TypeTask, CreatedAt: time.Now()},
+	}
+
+	d := NewDetail(80, 30, issues)
+	d.SetIssue(&issues[0])
+
+	content := d.renderContent()
+	if !strings.Contains(content, "Progress:") {
+		t.Fatalf("content should contain Progress row, got: %s", content)
+	}
+	if !strings.Contains(content, "1/2 (50%)") {
+		t.Fatalf("content should contain 1/2 progress label, got: %s", content)
+	}
+}
+
 func TestSetMolecule(t *testing.T) {
 	issues := []data.Issue{
 		{ID: "mg-001", Title: "Test Issue", Status: data.StatusInProgress, Priority: data.PriorityMedium, IssueType: data.TypeTask, CreatedAt: time.Now()},

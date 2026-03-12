@@ -2,6 +2,9 @@ package data
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -114,6 +117,61 @@ func TestParseIssuesCLIOutputAllowsExpectedAndHQPrefixes(t *testing.T) {
 	}
 	if len(issues) != 2 {
 		t.Fatalf("len(issues) = %d, want 2", len(issues))
+	}
+}
+
+func TestFetchIssuesCLIUsesFlatWithRealBDInvocation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-based fake bd test is not supported on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	projectDir := filepath.Join(tmpDir, "project")
+	beadsDir := filepath.Join(projectDir, ".beads")
+	if err := os.MkdirAll(beadsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(beadsDir, "config.yaml"), []byte("issue-prefix: mg\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	argsPath := filepath.Join(tmpDir, "bd-args.txt")
+	t.Setenv("FAKE_BD_ARGS_FILE", argsPath)
+	t.Setenv("PATH", tmpDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	script := `#!/bin/sh
+printf '%s
+' "$@" > "$FAKE_BD_ARGS_FILE"
+cat <<'EOF'
+[{"id":"mg-2","title":"CLI issue","status":"open","priority":2,"issue_type":"task","created_at":"2026-03-01T00:00:00Z","created_by":"system","updated_at":"2026-03-01T00:00:00Z"}]
+EOF
+`
+	fakeBD := filepath.Join(tmpDir, "bd")
+	if err := os.WriteFile(fakeBD, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	issues, err := FetchIssuesCLI(projectDir)
+	if err != nil {
+		t.Fatalf("FetchIssuesCLI() error = %v", err)
+	}
+	if len(issues) != 1 || issues[0].ID != "mg-2" {
+		t.Fatalf("FetchIssuesCLI() returned %+v, want single mg-2 issue", issues)
+	}
+
+	argsRaw, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("ReadFile(args) error = %v", err)
+	}
+	gotArgs := strings.Fields(string(argsRaw))
+	wantArgs := bdListArgs()
+	if len(gotArgs) != len(wantArgs) {
+		t.Fatalf("argv len = %d, want %d (%q)", len(gotArgs), len(wantArgs), string(argsRaw))
+	}
+	for i, want := range wantArgs {
+		if gotArgs[i] != want {
+			t.Fatalf("argv[%d] = %q, want %q (full: %q)", i, gotArgs[i], want, string(argsRaw))
+		}
 	}
 }
 
