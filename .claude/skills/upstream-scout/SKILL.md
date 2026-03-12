@@ -1,7 +1,6 @@
 ---
 name: upstream-scout
 description: Research recent changes in beads and gastown upstream repos. Identifies new features to leverage, breaking changes to handle, and creates a research document with actionable items.
-disable-model-invocation: true
 argument-hint: "[beads|gastown|both (default: both)]"
 ---
 
