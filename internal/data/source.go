@@ -66,7 +66,7 @@ func parseBdVersionWarning(output string) string {
 	// Version is the last field (handles "bd version 0.59.0" and "0.59.0")
 	ver := fields[len(fields)-1]
 	if ver == "0.59.0" {
-		return "bd v0.59.0 has a known bug where --json is ignored; upgrade to v0.59.1+"
+		return "bd v0.59.0 has a known bug where --json is ignored; upgrade to v0.60.0+"
 	}
 	return ""
 }
@@ -90,7 +90,7 @@ func parseIssuesCLIOutput(out []byte, expectedPrefix string) ([]Issue, error) {
 		// Check if bd returned tree-formatted text instead of JSON
 		trimmed := strings.TrimSpace(string(out))
 		if trimmed != "" && !strings.HasPrefix(trimmed, "[") && !strings.HasPrefix(trimmed, "{") {
-			return nil, fmt.Errorf("bd list returned non-JSON output (tree format?) — bd v0.59.0 has a known bug, upgrade to v0.59.1+")
+			return nil, fmt.Errorf("bd list returned non-JSON output (tree format?) — bd v0.59.0 has a known bug, upgrade to v0.60.0+")
 		}
 		return nil, fmt.Errorf("bd list parse: %w", err)
 	}

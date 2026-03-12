@@ -52,7 +52,7 @@ func TestCheckBdVersionKnownBroken(t *testing.T) {
 	if got == "" {
 		t.Fatal("expected warning for v0.59.0, got empty string")
 	}
-	if got != "bd v0.59.0 has a known bug where --json is ignored; upgrade to v0.59.1+" {
+	if got != "bd v0.59.0 has a known bug where --json is ignored; upgrade to v0.60.0+" {
 		t.Errorf("unexpected warning: %q", got)
 	}
 }
