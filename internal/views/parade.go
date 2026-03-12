@@ -58,6 +58,7 @@ type Parade struct {
 	ActiveAgents    map[string]string // issueID -> tmux window name
 	TownStatus      *gastown.TownStatus
 	ChangedIDs      map[string]bool  // recently changed issues (change indicator dot)
+	OrphanedIDs     map[string]bool  // orphaned issues from dead rigs
 	Selected        map[string]bool  // multi-selected issue IDs
 	MatchHighlights map[string][]int // issueID -> matched char indices in title (fuzzy search)
 }
@@ -413,6 +414,14 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool, distFromCursor int)
 		changeWidth = 2
 	}
 
+	// Orphan indicator (dead rig)
+	orphanPrefix := ""
+	orphanWidth := 0
+	if p.OrphanedIDs != nil && p.OrphanedIDs[issue.ID] {
+		orphanPrefix = lipgloss.NewStyle().Foreground(ui.StatusStalled).Render(ui.SymDeadRig) + " "
+		orphanWidth = 2
+	}
+
 	// Agent badge prefix
 	agentPrefix := ""
 	agentWidth := 0
@@ -489,7 +498,7 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool, distFromCursor int)
 	innerWidth := p.Width - 4 // │ + space + content + space + │
 
 	// First, constrain the hint length if the terminal is very narrow
-	maxHint := innerWidth - 16 - agentWidth - indentWidth - dueWidth - deferWidth
+	maxHint := innerWidth - 16 - agentWidth - indentWidth - dueWidth - deferWidth - orphanWidth
 	if maxHint < 0 {
 		maxHint = 0
 	}
@@ -506,7 +515,7 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool, distFromCursor int)
 	}
 
 	hintLen := lipgloss.Width(hint)
-	maxTitle := innerWidth - 16 - hintLen - agentWidth - changeWidth - selectWidth - indentWidth - dueWidth - deferWidth - qualityWidth
+	maxTitle := innerWidth - 16 - hintLen - agentWidth - changeWidth - selectWidth - indentWidth - dueWidth - deferWidth - qualityWidth - orphanWidth
 	if maxTitle < 0 {
 		maxTitle = 0
 	}
@@ -529,11 +538,12 @@ func (p *Parade) renderIssue(item ParadeItem, selected bool, distFromCursor int)
 	agePct := min(ageDays*100/30, 100) // 30 days = fully stale
 	idStyle := ui.GradientHeat.At(agePct)
 
-	line := fmt.Sprintf("%s%s %s%s%s%s %s %s",
+	line := fmt.Sprintf("%s%s %s%s%s%s%s %s %s",
 		indent,
 		symStyle.Render(sym),
 		selectPrefix,
 		changePrefix,
+		orphanPrefix,
 		agentPrefix,
 		idStyle.Render(issue.ID),
 		renderedTitle,

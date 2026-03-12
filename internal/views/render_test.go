@@ -271,6 +271,53 @@ func TestRenderIssueChangedDot(t *testing.T) {
 	}
 }
 
+func TestRenderIssueOrphanBadge(t *testing.T) {
+	issues := []data.Issue{
+		testIssue("orph-1", data.StatusInProgress),
+	}
+	p := NewParade(issues, 80, 20, data.DefaultBlockingTypes)
+	p.OrphanedIDs = map[string]bool{"orph-1": true}
+
+	var item ParadeItem
+	for _, it := range p.Items {
+		if it.Issue != nil {
+			item = it
+			break
+		}
+	}
+	if item.Issue == nil {
+		t.Fatal("no selectable item found")
+	}
+
+	out := p.renderIssue(item, false, 0)
+	if !strings.Contains(out, ui.SymDeadRig) {
+		t.Fatalf("renderIssue with OrphanedIDs should contain %q, got: %s", ui.SymDeadRig, out)
+	}
+}
+
+func TestRenderIssueNoOrphanBadge(t *testing.T) {
+	issues := []data.Issue{
+		testIssue("norm-1", data.StatusOpen),
+	}
+	p := NewParade(issues, 80, 20, data.DefaultBlockingTypes)
+
+	var item ParadeItem
+	for _, it := range p.Items {
+		if it.Issue != nil {
+			item = it
+			break
+		}
+	}
+	if item.Issue == nil {
+		t.Fatal("no selectable item found")
+	}
+
+	out := p.renderIssue(item, false, 0)
+	if strings.Contains(out, ui.SymDeadRig) {
+		t.Fatalf("renderIssue without OrphanedIDs should not contain %q", ui.SymDeadRig)
+	}
+}
+
 func TestDetailViewNilIssue(t *testing.T) {
 	d := Detail{Width: 60, Height: 20}
 	d.Viewport = viewport.New(viewport.WithWidth(58), viewport.WithHeight(20))

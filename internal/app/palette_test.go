@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/matt-wright86/mardi-gras/internal/components"
 	"github.com/matt-wright86/mardi-gras/internal/data"
+	"github.com/matt-wright86/mardi-gras/internal/gastown"
 )
 
 func initModel(t *testing.T) Model {
@@ -160,6 +161,38 @@ func TestBuildPaletteCommandsConditional(t *testing.T) {
 			if cmd.Action == components.ActionLaunchAgent || cmd.Action == components.ActionKillAgent {
 				t.Errorf("unexpected agent action %d when agentAvail=false", cmd.Action)
 			}
+		}
+	})
+
+	t.Run("no recovery command without dead rigs", func(t *testing.T) {
+		got.gtEnv.Available = true
+		got.townStatus = &gastown.TownStatus{}
+		cmds := got.buildPaletteCommands()
+		for _, cmd := range cmds {
+			if cmd.Action == components.ActionRecoverRigs {
+				t.Error("unexpected ActionRecoverRigs when no dead rigs")
+			}
+		}
+	})
+
+	t.Run("recovery command with dead rigs", func(t *testing.T) {
+		got.gtEnv.Available = true
+		got.townStatus = &gastown.TownStatus{
+			Rigs: []gastown.RigStatus{{Name: "dead_rig", PolecatCount: 0}},
+			Agents: []gastown.AgentRuntime{
+				{Name: "ghost", Rig: "dead_rig", HookBead: "mg-001", Running: false},
+			},
+		}
+		cmds := got.buildPaletteCommands()
+		found := false
+		for _, cmd := range cmds {
+			if cmd.Action == components.ActionRecoverRigs {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("expected ActionRecoverRigs when dead rigs exist")
 		}
 	})
 

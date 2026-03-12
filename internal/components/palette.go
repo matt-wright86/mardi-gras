@@ -39,6 +39,7 @@ const (
 	ActionCreateConvoy
 	ActionCascadeClose
 	ActionCycleLayout
+	ActionRecoverRigs
 )
 
 // PaletteCommand is a single entry in the command palette.

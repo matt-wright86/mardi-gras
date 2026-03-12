@@ -1929,6 +1929,11 @@ func (m Model) buildPaletteCommands() []components.PaletteCommand {
 			components.PaletteCommand{Name: "Create convoy", Desc: "Create convoy from selected issues", Key: "C", Action: components.ActionCreateConvoy},
 			components.PaletteCommand{Name: "Cascade close", Desc: "Close issue and all children", Key: "", Action: components.ActionCascadeClose},
 		)
+		if deadRigs := gastown.FindDeadRigs(m.townStatus); len(deadRigs) > 0 {
+			cmds = append(cmds,
+				components.PaletteCommand{Name: "Recover dead rigs", Desc: fmt.Sprintf("Release orphans from %d dead rig(s)", len(deadRigs)), Key: "", Action: components.ActionRecoverRigs},
+			)
+		}
 	}
 
 	return cmds
@@ -2016,6 +2021,19 @@ func (m Model) executePaletteAction(action components.PaletteAction) (tea.Model,
 		m.toast = toast
 		m.layout()
 		return m, cmd
+	case components.ActionRecoverRigs:
+		deadRigs := gastown.FindDeadRigs(m.townStatus)
+		if len(deadRigs) == 0 {
+			toast, cmd := components.ShowToast("No dead rigs found", components.ToastInfo, toastDuration)
+			m.toast = toast
+			return m, cmd
+		}
+		// Recover the first dead rig (most common case is a single dead rig)
+		rigName := deadRigs[0]
+		orphans := gastown.FindOrphans(m.townStatus, rigName)
+		m.recovering = true
+		m.recoveryDialog = components.NewRecoveryDialog(rigName, orphans, m.width, m.height)
+		return m, nil
 	case components.ActionHelp:
 		m.showHelp = true
 		return m, nil
@@ -2456,9 +2474,31 @@ func (m *Model) propagateAgentState() {
 	m.header.AgentCount = len(m.activeAgents)
 	m.header.TownStatus = m.townStatus
 	m.header.GasTownAvailable = m.gtEnv.Available
+
+	// Build orphaned issue ID set from dead rigs
+	m.parade.OrphanedIDs = buildOrphanedIDs(m.townStatus)
+
 	if m.detail.Issue != nil {
 		m.detail.SetIssue(m.detail.Issue)
 	}
+}
+
+// buildOrphanedIDs returns a set of issue IDs that are orphaned from dead rigs.
+func buildOrphanedIDs(status *gastown.TownStatus) map[string]bool {
+	deadRigs := gastown.FindDeadRigs(status)
+	if len(deadRigs) == 0 {
+		return nil
+	}
+	ids := make(map[string]bool)
+	for _, rig := range deadRigs {
+		for _, o := range gastown.FindOrphans(status, rig) {
+			ids[o.IssueID] = true
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	return ids
 }
 
 // gatedPollAgentState returns a Cmd that queries Gas Town or raw tmux for agent state.
