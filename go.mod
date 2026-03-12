@@ -1,11 +1,11 @@
 module github.com/matt-wright86/mardi-gras
 
-go 1.24.2
+go 1.25.0
 
 require (
 	charm.land/bubbles/v2 v2.0.0
-	charm.land/bubbletea/v2 v2.0.1
-	charm.land/lipgloss/v2 v2.0.0
+	charm.land/bubbletea/v2 v2.0.2
+	charm.land/lipgloss/v2 v2.0.2
 	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/glamour v0.10.0
 	github.com/charmbracelet/ultraviolet v0.0.0-20260303162955-0b88c25f3fff
@@ -42,7 +42,7 @@ require (
 	github.com/yuin/goldmark-emoji v1.0.5 // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/term v0.31.0 // indirect
 	golang.org/x/text v0.24.0 // indirect
 )
