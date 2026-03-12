@@ -936,6 +936,41 @@ func TestMetadataWithIssueValues(t *testing.T) {
 	}
 }
 
+func TestRendererCachedAcrossRenderCalls(t *testing.T) {
+	issues := []data.Issue{
+		{ID: "mg-001", Title: "Test", Status: data.StatusOpen,
+			Priority: data.PriorityMedium, IssueType: data.TypeTask,
+			CreatedAt: time.Now(),
+			Description: "Some **markdown** text"},
+	}
+	d := NewDetail(80, 40, issues)
+	d.SetIssue(&issues[0])
+
+	// After rendering content (which calls renderMarkdown), the renderer should be cached
+	d.renderContent()
+	r1 := d.renderer
+	if r1 == nil {
+		t.Fatal("expected renderer to be cached after renderContent")
+	}
+	w1 := d.rendererWidth
+
+	// Render again at the same width — should reuse same renderer
+	d.renderContent()
+	if d.renderer != r1 {
+		t.Fatal("expected renderer to be reused when width unchanged")
+	}
+
+	// Change width — renderer should be recreated
+	d.SetSize(120, 40)
+	d.renderContent()
+	if d.rendererWidth == w1 {
+		t.Fatal("expected rendererWidth to change after SetSize")
+	}
+	if d.renderer == r1 {
+		t.Fatal("expected renderer to be recreated after width change")
+	}
+}
+
 func TestMetadataRawValuesWithoutSchema(t *testing.T) {
 	issues := []data.Issue{
 		{ID: "mg-001", Title: "Raw Metadata", Status: data.StatusOpen,

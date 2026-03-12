@@ -44,8 +44,10 @@ const (
 
 // Model is the root BubbleTea model.
 type Model struct {
-	issues        []data.Issue
-	groups        map[data.ParadeStatus][]data.Issue
+	issues         []data.Issue
+	issueGen       uint64 // incremented when m.issues changes, used to invalidate caches
+	cachedIssueMap map[string]*data.Issue
+	groups         map[data.ParadeStatus][]data.Issue
 	parade        views.Parade
 	detail        views.Detail
 	header        components.Header
@@ -58,6 +60,7 @@ type Model struct {
 	blockingTypes map[string]bool
 	filterInput   textinput.Model
 	filtering     bool
+	filterSeq     uint64 // debounce sequence counter for filter keystrokes
 	showHelp      bool
 	help          components.Help
 	ready         bool
@@ -146,7 +149,8 @@ type Model struct {
 	layoutPreset LayoutPreset
 
 	// Bead string shimmer animation
-	beadOffset int
+	beadOffset    int
+	shimmerActive bool
 
 	// Metadata schema from .beads/config.yaml
 	metadataSchema *data.MetadataSchema
@@ -232,6 +236,7 @@ func (m Model) Init() tea.Cmd {
 	} else if m.inTmux {
 		agentPoll = pollTmuxAgentState
 	}
+	m.shimmerActive = true
 	cmds := []tea.Cmd{
 		m.startPoll(),
 		agentPoll,
@@ -473,6 +478,9 @@ type gasTownTickMsg struct{}
 
 // headerShimmerMsg drives the bead string shimmer animation.
 type headerShimmerMsg struct{}
+
+// filterDebounceMsg fires after a debounce delay to trigger parade rebuild.
+type filterDebounceMsg struct{ seq uint64 }
 
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -753,7 +761,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.issues = msg.Issues
-		m.groups = data.GroupByParade(msg.Issues, m.blockingTypes)
+		m.cachedIssueMap = nil // invalidate cache — issues changed
+		m.groups = data.GroupByParade(msg.Issues, m.blockingTypes, m.issueMap())
 		if !msg.LastMod.IsZero() {
 			m.lastFileMod = msg.LastMod
 		}
@@ -786,7 +795,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			components.ToastSuccess, toastDuration,
 		)
 		m.toast = toast
-		return m, cmd
+		cmds := []tea.Cmd{cmd}
+		if !m.shimmerActive {
+			m.shimmerActive = true
+			cmds = append(cmds, headerShimmerCmd())
+		}
+		return m, tea.Batch(cmds...)
 
 	case agentLaunchErrorMsg:
 		toast, cmd := components.ShowToast(
@@ -799,6 +813,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case agentStatusMsg:
 		m.activeAgents = msg.activeAgents
 		m.propagateAgentState()
+		if !m.shimmerActive && len(m.activeAgents) > 0 {
+			m.shimmerActive = true
+			return m, headerShimmerCmd()
+		}
 		return m, nil
 
 	case townStatusMsg:
@@ -814,9 +832,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.showProblems {
 				m.problems.SetProblems(m.allProblems())
 			}
+			// Restart shimmer if agents became active
+			var cmds []tea.Cmd
+			if !m.shimmerActive && len(m.activeAgents) > 0 {
+				m.shimmerActive = true
+				cmds = append(cmds, headerShimmerCmd())
+			}
 			// Check if selected issue now has an agent → fetch molecule
 			if cmd := m.maybeFetchMolecule(); cmd != nil {
-				return m, cmd
+				cmds = append(cmds, cmd)
+			}
+			if len(cmds) > 0 {
+				return m, tea.Batch(cmds...)
 			}
 		}
 		return m, nil
@@ -1209,7 +1236,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case headerShimmerMsg:
 		m.beadOffset++
-		return m, headerShimmerCmd()
+		// Only continue shimmer when there's activity (agents running or gas town active)
+		if len(m.activeAgents) > 0 || m.gasTownTicking {
+			m.shimmerActive = true
+			return m, headerShimmerCmd()
+		}
+		m.shimmerActive = false
+		return m, nil
+
+	case filterDebounceMsg:
+		if msg.seq == m.filterSeq {
+			m.rebuildParade()
+		}
+		return m, nil
 
 	case components.ToastDismissMsg:
 		m.toast = components.Toast{}
@@ -1314,7 +1353,12 @@ func (m Model) handleFilteringKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	oldVal := m.filterInput.Value()
 	m.filterInput, cmd = m.filterInput.Update(msg)
 	if m.filterInput.Value() != oldVal {
-		m.rebuildParade()
+		m.filterSeq++
+		seq := m.filterSeq
+		debounceCmd := tea.Tick(150*time.Millisecond, func(time.Time) tea.Msg {
+			return filterDebounceMsg{seq: seq}
+		})
+		return m, tea.Batch(cmd, debounceCmd)
 	}
 	return m, cmd
 }
@@ -2359,6 +2403,14 @@ func (m *Model) layout() {
 	}
 }
 
+// issueMap returns a cached issue map for all issues, rebuilding only when issues change.
+func (m *Model) issueMap() map[string]*data.Issue {
+	if m.cachedIssueMap == nil {
+		m.cachedIssueMap = data.BuildIssueMap(m.issues)
+	}
+	return m.cachedIssueMap
+}
+
 // rebuildParade reconstructs the parade from current issues, preserving selection if possible.
 func (m *Model) rebuildParade() {
 	oldSelectedID := ""
@@ -2381,11 +2433,12 @@ func (m *Model) rebuildParade() {
 		filteredIssues = data.FocusFilter(filteredIssues, m.blockingTypes)
 	}
 	groups := m.groups
-	detailIssueMap := data.BuildIssueMap(m.issues)
+	detailIssueMap := m.issueMap()
 	paradeIssueMap := detailIssueMap
 	if m.filterInput.Value() != "" || m.focusMode {
-		groups = data.GroupByParade(filteredIssues, m.blockingTypes)
-		paradeIssueMap = data.BuildIssueMap(filteredIssues)
+		filteredMap := data.BuildIssueMap(filteredIssues)
+		groups = data.GroupByParade(filteredIssues, m.blockingTypes, filteredMap)
+		paradeIssueMap = filteredMap
 	}
 
 	m.header = components.Header{

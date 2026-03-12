@@ -60,8 +60,14 @@ func SortIssues(issues []Issue) {
 }
 
 // GroupByParade groups issues into parade sections.
-func GroupByParade(issues []Issue, blockingTypes map[string]bool) map[ParadeStatus][]Issue {
-	issueMap := BuildIssueMap(issues)
+// An optional pre-built issueMap can be passed to avoid redundant BuildIssueMap calls.
+func GroupByParade(issues []Issue, blockingTypes map[string]bool, issueMap ...map[string]*Issue) map[ParadeStatus][]Issue {
+	var im map[string]*Issue
+	if len(issueMap) > 0 && issueMap[0] != nil {
+		im = issueMap[0]
+	} else {
+		im = BuildIssueMap(issues)
+	}
 	groups := map[ParadeStatus][]Issue{
 		ParadeRolling:      {},
 		ParadeLinedUp:      {},
@@ -69,7 +75,7 @@ func GroupByParade(issues []Issue, blockingTypes map[string]bool) map[ParadeStat
 		ParadePastTheStand: {},
 	}
 	for _, issue := range issues {
-		group := issue.ParadeGroup(issueMap, blockingTypes)
+		group := issue.ParadeGroup(im, blockingTypes)
 		groups[group] = append(groups[group], issue)
 	}
 	return groups

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/matt-wright86/mardi-gras/internal/components"
@@ -198,6 +199,189 @@ func TestViewWithHelp(t *testing.T) {
 
 	if normalView.Content == helpView.Content {
 		t.Fatal("expected View() output to differ when showHelp is true")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestShimmerStopsWhenIdle
+// ---------------------------------------------------------------------------
+
+func TestShimmerStopsWhenIdle(t *testing.T) {
+	issues := []data.Issue{testIssue("open-1", data.StatusOpen)}
+	m := New(issues, data.Source{}, data.DefaultBlockingTypes)
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	got := model.(Model)
+
+	// Simulate shimmer tick with no active agents and no gasTownTicking
+	got.activeAgents = make(map[string]string)
+	got.gasTownTicking = false
+	got.shimmerActive = true
+
+	model, cmd := got.Update(headerShimmerMsg{})
+	got = model.(Model)
+
+	if got.shimmerActive {
+		t.Fatal("expected shimmerActive to be false when idle (no agents, no gasTownTicking)")
+	}
+	if cmd != nil {
+		t.Fatal("expected nil cmd when shimmer stops (no next tick scheduled)")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestShimmerContinuesWithActiveAgents
+// ---------------------------------------------------------------------------
+
+func TestShimmerContinuesWithActiveAgents(t *testing.T) {
+	issues := []data.Issue{testIssue("open-1", data.StatusOpen)}
+	m := New(issues, data.Source{}, data.DefaultBlockingTypes)
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	got := model.(Model)
+
+	got.activeAgents = map[string]string{"open-1": "polecat-1"}
+	got.shimmerActive = true
+
+	model, cmd := got.Update(headerShimmerMsg{})
+	got = model.(Model)
+
+	if !got.shimmerActive {
+		t.Fatal("expected shimmerActive to remain true when agents are active")
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd to schedule next shimmer tick")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestShimmerRestartsOnAgentLaunch
+// ---------------------------------------------------------------------------
+
+func TestShimmerRestartsOnAgentLaunch(t *testing.T) {
+	issues := []data.Issue{testIssue("open-1", data.StatusOpen)}
+	m := New(issues, data.Source{}, data.DefaultBlockingTypes)
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	got := model.(Model)
+
+	got.shimmerActive = false
+	got.activeAgents = make(map[string]string)
+
+	model, cmd := got.Update(agentLaunchedMsg{issueID: "open-1", windowName: "polecat-1"})
+	got = model.(Model)
+
+	if !got.shimmerActive {
+		t.Fatal("expected shimmerActive to be true after agent launch")
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd after agent launch (shimmer + toast)")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestFilterDebounceProducesTickNotImmediateRebuild
+// ---------------------------------------------------------------------------
+
+func TestFilterDebounceProducesTickNotImmediateRebuild(t *testing.T) {
+	issues := []data.Issue{
+		testIssue("alpha-1", data.StatusOpen),
+		testIssue("beta-1", data.StatusOpen),
+	}
+
+	m := New(issues, data.Source{}, data.DefaultBlockingTypes)
+	m.startedAt = time.Now().Add(-time.Second)
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	got := model.(Model)
+
+	// Enter filter mode
+	model, _ = got.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+	got = model.(Model)
+
+	// Record initial filterSeq
+	initialSeq := got.filterSeq
+
+	// Type a character
+	model, cmd := got.Update(tea.KeyPressMsg{Code: 'b', Text: "b"})
+	got = model.(Model)
+
+	if got.filterSeq != initialSeq+1 {
+		t.Fatalf("expected filterSeq to increment from %d to %d, got %d",
+			initialSeq, initialSeq+1, got.filterSeq)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd (debounce tick) after filter keystroke")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestFilterDebounceSeqMismatchSkipsRebuild
+// ---------------------------------------------------------------------------
+
+func TestFilterDebounceSeqMismatchSkipsRebuild(t *testing.T) {
+	issues := []data.Issue{testIssue("open-1", data.StatusOpen)}
+	m := New(issues, data.Source{}, data.DefaultBlockingTypes)
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	got := model.(Model)
+
+	// Advance filterSeq past what the debounce message carries
+	got.filterSeq = 5
+
+	// A stale debounce message with an old seq should be a no-op
+	model, cmd := got.Update(filterDebounceMsg{seq: 3})
+	got = model.(Model)
+
+	if cmd != nil {
+		t.Fatal("expected nil cmd for stale debounce message")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestFilterDebounceSeqMatchTriggersRebuild
+// ---------------------------------------------------------------------------
+
+func TestFilterDebounceSeqMatchTriggersRebuild(t *testing.T) {
+	issues := []data.Issue{testIssue("open-1", data.StatusOpen)}
+	m := New(issues, data.Source{}, data.DefaultBlockingTypes)
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	got := model.(Model)
+
+	got.filterSeq = 5
+
+	// Matching seq should trigger rebuild (no error/panic)
+	model, _ = got.Update(filterDebounceMsg{seq: 5})
+	_ = model.(Model)
+	// If we get here without panic, the rebuild executed successfully
+}
+
+// ---------------------------------------------------------------------------
+// TestIssueMapCacheInvalidatedOnFileChange
+// ---------------------------------------------------------------------------
+
+func TestIssueMapCacheInvalidatedOnFileChange(t *testing.T) {
+	issues := []data.Issue{testIssue("open-1", data.StatusOpen)}
+	m := New(issues, data.Source{}, data.DefaultBlockingTypes)
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	got := model.(Model)
+
+	// Prime the cache
+	im1 := got.issueMap()
+	if im1 == nil {
+		t.Fatal("expected non-nil issue map")
+	}
+	if got.cachedIssueMap == nil {
+		t.Fatal("expected cachedIssueMap to be populated")
+	}
+
+	// Simulate file change with new issues
+	newIssues := []data.Issue{
+		testIssue("open-1", data.StatusOpen),
+		testIssue("open-2", data.StatusOpen),
+	}
+	model, _ = got.Update(data.FileChangedMsg{Issues: newIssues})
+	got = model.(Model)
+
+	// Cache should have been rebuilt with new data
+	im2 := got.issueMap()
+	if len(im2) != 2 {
+		t.Fatalf("expected 2 entries in issue map after refresh, got %d", len(im2))
 	}
 }
 

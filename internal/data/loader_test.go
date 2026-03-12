@@ -62,6 +62,48 @@ func TestGroupByParade(t *testing.T) {
 	}
 }
 
+func TestGroupByParadeWithPrebuiltMap(t *testing.T) {
+	path := filepath.Join("..", "..", "testdata", "sample.jsonl")
+	issues, _, err := LoadIssues(path)
+	if err != nil {
+		t.Fatalf("LoadIssues: %v", err)
+	}
+
+	// Without pre-built map (original behavior)
+	groupsA := GroupByParade(issues, DefaultBlockingTypes)
+
+	// With pre-built map
+	issueMap := BuildIssueMap(issues)
+	groupsB := GroupByParade(issues, DefaultBlockingTypes, issueMap)
+
+	// Results should be identical
+	for _, status := range []ParadeStatus{ParadeRolling, ParadeLinedUp, ParadeStalled, ParadePastTheStand} {
+		if len(groupsA[status]) != len(groupsB[status]) {
+			t.Errorf("status %d: without map has %d issues, with map has %d",
+				status, len(groupsA[status]), len(groupsB[status]))
+		}
+	}
+}
+
+func TestGroupByParadeWithNilMap(t *testing.T) {
+	path := filepath.Join("..", "..", "testdata", "sample.jsonl")
+	issues, _, err := LoadIssues(path)
+	if err != nil {
+		t.Fatalf("LoadIssues: %v", err)
+	}
+
+	// Passing explicit nil should behave the same as no argument
+	groupsA := GroupByParade(issues, DefaultBlockingTypes)
+	groupsB := GroupByParade(issues, DefaultBlockingTypes, nil)
+
+	for _, status := range []ParadeStatus{ParadeRolling, ParadeLinedUp, ParadeStalled, ParadePastTheStand} {
+		if len(groupsA[status]) != len(groupsB[status]) {
+			t.Errorf("status %d: no-arg has %d issues, nil-arg has %d",
+				status, len(groupsA[status]), len(groupsB[status]))
+		}
+	}
+}
+
 func TestIsBlocked(t *testing.T) {
 	path := filepath.Join("..", "..", "testdata", "sample.jsonl")
 	issues, _, err := LoadIssues(path)

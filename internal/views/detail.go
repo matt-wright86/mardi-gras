@@ -33,6 +33,10 @@ type Detail struct {
 	CommentsIssueID  string // which issue the comments belong to
 	RichIssueID      string // which issue has had rich detail fetched
 	MetadataSchema   *data.MetadataSchema
+
+	// Cached glamour renderer (expensive to create due to terminal color detection)
+	renderer      *glamour.TermRenderer
+	rendererWidth int
 }
 
 // NewDetail creates a detail panel.
@@ -133,19 +137,24 @@ func (d *Detail) View() string {
 }
 
 // renderMarkdown renders markdown text using glamour with dark theme.
+// The renderer is cached and only recreated when the content width changes.
 func (d *Detail) renderMarkdown(text string) string {
 	contentWidth := d.Width - 6
 	if contentWidth < 20 {
 		contentWidth = 20
 	}
-	r, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(contentWidth),
-	)
-	if err != nil {
-		return wordWrap(text, d.Width-4)
+	if d.renderer == nil || d.rendererWidth != contentWidth {
+		r, err := glamour.NewTermRenderer(
+			glamour.WithAutoStyle(),
+			glamour.WithWordWrap(contentWidth),
+		)
+		if err != nil {
+			return wordWrap(text, d.Width-4)
+		}
+		d.renderer = r
+		d.rendererWidth = contentWidth
 	}
-	rendered, err := r.Render(text)
+	rendered, err := d.renderer.Render(text)
 	if err != nil {
 		return wordWrap(text, d.Width-4)
 	}
