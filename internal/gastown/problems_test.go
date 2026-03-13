@@ -226,6 +226,51 @@ func TestIsStandstillStates(t *testing.T) {
 	}
 }
 
+func TestStandstillToastDedup(t *testing.T) {
+	// Helper: compute new standstill IDs (same logic as townStatusMsg handler)
+	diffStandstill := func(prev, current map[string]string) []string {
+		var newIDs []string
+		for id, reason := range current {
+			if prevReason, seen := prev[id]; !seen || prevReason != reason {
+				newIDs = append(newIDs, id)
+			}
+		}
+		return newIDs
+	}
+
+	// First poll: everything is new
+	prev := map[string]string(nil)
+	curr := map[string]string{"mg-001": "stuck", "mg-002": "stalled"}
+	newIDs := diffStandstill(prev, curr)
+	if len(newIDs) != 2 {
+		t.Errorf("first poll: expected 2 new, got %d", len(newIDs))
+	}
+
+	// Second poll: same set, nothing new
+	prev = curr
+	curr = map[string]string{"mg-001": "stuck", "mg-002": "stalled"}
+	newIDs = diffStandstill(prev, curr)
+	if len(newIDs) != 0 {
+		t.Errorf("repeat poll: expected 0 new, got %d", len(newIDs))
+	}
+
+	// Third poll: mg-001 escalates from stalled to stuck, mg-003 enters
+	prev = map[string]string{"mg-001": "stalled", "mg-002": "stalled"}
+	curr = map[string]string{"mg-001": "stuck", "mg-002": "stalled", "mg-003": "awaiting-gate"}
+	newIDs = diffStandstill(prev, curr)
+	if len(newIDs) != 2 {
+		t.Errorf("escalation poll: expected 2 new (escalated + new entry), got %d", len(newIDs))
+	}
+
+	// Fourth poll: mg-001 clears, then re-enters — should fire again
+	prev = map[string]string{"mg-002": "stalled"} // mg-001 was removed
+	curr = map[string]string{"mg-001": "stuck", "mg-002": "stalled"}
+	newIDs = diffStandstill(prev, curr)
+	if len(newIDs) != 1 {
+		t.Errorf("re-enter poll: expected 1 new, got %d", len(newIDs))
+	}
+}
+
 func TestBuildStandstillIDsNil(t *testing.T) {
 	ids := BuildStandstillIDs(nil)
 	if len(ids) != 0 {

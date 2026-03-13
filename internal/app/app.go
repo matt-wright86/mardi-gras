@@ -83,7 +83,8 @@ type Model struct {
 	// Change indicators: track recently changed issue IDs
 	changedIDs   map[string]bool
 	changedAt    time.Time
-	prevIssueMap map[string]data.Status // issueID -> previous status for diffing
+	prevIssueMap      map[string]data.Status // issueID -> previous status for diffing
+	prevStandstillIDs map[string]string      // previous standstill set for toast dedup
 
 	// Focus mode
 	focusMode bool
@@ -825,6 +826,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.townStatus = msg.status
 			m.activeAgents = msg.status.ActiveAgentMap()
 			m.propagateAgentState()
+
+			// Standstill toast: fire for newly entered standstill issues
+			var toastCmd tea.Cmd
+			currentStandstill := m.parade.StandstillIDs // set by propagateAgentState above
+			var newStandstill []string
+			for id, reason := range currentStandstill {
+				if prevReason, seen := m.prevStandstillIDs[id]; !seen || prevReason != reason {
+					newStandstill = append(newStandstill, id)
+				}
+			}
+			if len(newStandstill) > 0 {
+				var toastMsg string
+				if len(newStandstill) == 1 {
+					id := newStandstill[0]
+					title := id
+					// Try to get a human-readable title from the agent
+					if a := m.townStatus.AgentForIssue(id); a != nil && a.WorkTitle != "" {
+						title = a.WorkTitle
+					}
+					toastMsg = fmt.Sprintf("%s %s — agent awaiting input", ui.SymWarning, title)
+				} else {
+					toastMsg = fmt.Sprintf("%s %d tasks awaiting agent input", ui.SymWarning, len(newStandstill))
+				}
+				var toast components.Toast
+				toast, toastCmd = components.ShowToast(toastMsg, components.ToastWarn, toastDuration)
+				m.toast = toast
+			}
+			m.prevStandstillIDs = currentStandstill
+
 			if m.showGasTown {
 				m.gasTown.SetStatus(m.townStatus, m.gtEnv)
 				m.recomputeVelocity()
@@ -834,6 +864,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Restart shimmer if agents became active
 			var cmds []tea.Cmd
+			if toastCmd != nil {
+				cmds = append(cmds, toastCmd)
+			}
 			if !m.shimmerActive && len(m.activeAgents) > 0 {
 				m.shimmerActive = true
 				cmds = append(cmds, headerShimmerCmd())
@@ -2530,6 +2563,9 @@ func (m *Model) propagateAgentState() {
 
 	// Build orphaned issue ID set from dead rigs
 	m.parade.OrphanedIDs = buildOrphanedIDs(m.townStatus)
+
+	// Build standstill issue ID set from agent states
+	m.parade.StandstillIDs = gastown.BuildStandstillIDs(m.townStatus)
 
 	if m.detail.Issue != nil {
 		m.detail.SetIssue(m.detail.Issue)
