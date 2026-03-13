@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -237,6 +238,15 @@ func (d *Detail) renderContent() string {
 
 	// ID
 	lines = append(lines, d.row("ID:", ui.DetailValue.Render(issue.ID)))
+
+	// Worktree
+	if wt := data.WorktreePath(*issue); wt != "" {
+		wtStyle := lipgloss.NewStyle().Foreground(ui.Muted)
+		if _, err := os.Stat(wt); err != nil {
+			wtStyle = wtStyle.Strikethrough(true)
+		}
+		lines = append(lines, d.row("Worktree:", wtStyle.Render(wt)))
+	}
 
 	// Agent status
 	if d.ActiveAgents != nil {
