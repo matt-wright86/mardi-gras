@@ -1926,6 +1926,10 @@ func (m Model) copyBranchName() (tea.Model, tea.Cmd) {
 	}
 	branch := data.BranchName(*issue)
 	err := clipboard.WriteAll(branch)
+	if err != nil && agent.InTmux() {
+		// Fall back to tmux buffer when system clipboard is unavailable.
+		err = exec.Command("tmux", "set-buffer", branch).Run()
+	}
 	if err != nil {
 		toast, cmd := components.ShowToast(
 			fmt.Sprintf("Clipboard error: %s", err),
