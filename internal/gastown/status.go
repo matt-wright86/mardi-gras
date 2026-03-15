@@ -91,7 +91,7 @@ type rawHook struct {
 // FetchStatus runs `gt status --json` and parses the output.
 // Returns nil TownStatus (not error) if gt is not available.
 func FetchStatus() (*TownStatus, error) {
-	out, err := runWithTimeout(TimeoutLong, "gt", "status", "--json")
+	out, err := runWithTimeout(timeoutLong, "gt", "status", "--json")
 	if err != nil {
 		return nil, fmt.Errorf("gt status: %w", err)
 	}

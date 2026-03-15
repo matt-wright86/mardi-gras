@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os/exec"
 	"testing"
+	"time"
 )
 
 func TestParseBdStderrJSON(t *testing.T) {
@@ -77,5 +78,32 @@ func TestWrapExitErrorEmptyStderr(t *testing.T) {
 	// Should return original error when no stderr to parse
 	if got != exitErr {
 		t.Errorf("wrapExitError should return original error for empty stderr, got %v", got)
+	}
+}
+
+func TestSetCmdTimeoutScalesProportionally(t *testing.T) {
+	defer func() {
+		timeoutMedium = defaultTimeoutMedium
+		timeoutShort = defaultTimeoutShort
+	}()
+
+	SetCmdTimeout(60) // double the 30s baseline
+	if timeoutMedium != 30*time.Second {
+		t.Errorf("timeoutMedium = %v, want 30s", timeoutMedium)
+	}
+	if timeoutShort != 10*time.Second {
+		t.Errorf("timeoutShort = %v, want 10s", timeoutShort)
+	}
+}
+
+func TestSetCmdTimeoutIgnoresZero(t *testing.T) {
+	defer func() {
+		timeoutMedium = defaultTimeoutMedium
+		timeoutShort = defaultTimeoutShort
+	}()
+
+	SetCmdTimeout(0)
+	if timeoutMedium != defaultTimeoutMedium {
+		t.Errorf("timeoutMedium changed on zero input: %v", timeoutMedium)
 	}
 }

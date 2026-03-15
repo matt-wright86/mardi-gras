@@ -15,7 +15,7 @@ type Comment struct {
 
 // FetchComments runs `bd comments <issueID> --json` and parses the output.
 func FetchComments(issueID string) ([]Comment, error) {
-	out, err := runWithTimeout(TimeoutMedium, "bd", "comments", issueID, "--json")
+	out, err := runWithTimeout(timeoutMedium, "bd", "comments", issueID, "--json")
 	if err != nil {
 		return nil, fmt.Errorf("bd comments: %w", err)
 	}

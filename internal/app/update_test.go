@@ -67,6 +67,23 @@ func TestMutateResultClosed(t *testing.T) {
 	}
 }
 
+func TestMutateResultClosedNoAnimations(t *testing.T) {
+	issues := []data.Issue{testIssue("open-1", data.StatusOpen)}
+	m := NewWithGuard(issues, data.Source{}, data.DefaultBlockingTypes, nil, true)
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	got := model.(Model)
+
+	model, _ = got.Update(mutateResultMsg{issueID: "open-1", action: "closed"})
+	got = model.(Model)
+
+	if got.confetti.Active() {
+		t.Fatal("expected confetti to be inactive when noAnimations is true")
+	}
+	if got.toast.Message == "" {
+		t.Fatal("expected toast notification after closing an issue with noAnimations")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // TestMutateResultError
 // ---------------------------------------------------------------------------

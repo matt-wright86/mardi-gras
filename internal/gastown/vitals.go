@@ -34,7 +34,7 @@ type BackupStatus struct {
 
 // FetchVitals runs `gt vitals` and parses the text output.
 func FetchVitals() (*Vitals, error) {
-	out, err := runWithTimeout(TimeoutMedium, "gt", "vitals")
+	out, err := runWithTimeout(timeoutMedium, "gt", "vitals")
 	if err != nil {
 		return nil, fmt.Errorf("gt vitals: %w", err)
 	}

@@ -37,7 +37,7 @@ type RigCost struct {
 
 // FetchCosts runs `gt costs --json` and parses the output.
 func FetchCosts() (*CostsOutput, error) {
-	out, err := runWithTimeout(TimeoutMedium, "gt", "costs", "--json")
+	out, err := runWithTimeout(timeoutMedium, "gt", "costs", "--json")
 	if err != nil {
 		return nil, fmt.Errorf("gt costs: %w", err)
 	}

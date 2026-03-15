@@ -9,19 +9,19 @@ import (
 // Sling dispatches work via `gt sling`. This is Gas Town's core primitive --
 // it auto-spawns polecats, auto-creates convoys, and starts the work lifecycle.
 func Sling(issueID string) error {
-	return execWithTimeout(TimeoutShort, "gt", "sling", issueID)
+	return execWithTimeout(timeoutShort, "gt", "sling", issueID)
 }
 
 // SlingWithFormula dispatches work using a named formula.
 // e.g., SlingWithFormula("bd-a1b2", "shiny") runs the full
 // design->implement->review->test->submit workflow.
 func SlingWithFormula(issueID, formula string) error {
-	return execWithTimeout(TimeoutShort, "gt", "sling", formula, "--on", issueID)
+	return execWithTimeout(timeoutShort, "gt", "sling", formula, "--on", issueID)
 }
 
 // ListFormulas returns available formula names by parsing `gt formula list`.
 func ListFormulas() ([]string, error) {
-	out, err := runWithTimeout(TimeoutShort, "gt", "formula", "list")
+	out, err := runWithTimeout(timeoutShort, "gt", "formula", "list")
 	if err != nil {
 		return nil, fmt.Errorf("gt formula list: %w", err)
 	}
@@ -37,7 +37,7 @@ func ListFormulas() ([]string, error) {
 
 // Unsling stops work dispatched via `gt sling`.
 func Unsling(issueID string) error {
-	return execWithTimeout(TimeoutShort, "gt", "unsling", issueID)
+	return execWithTimeout(timeoutShort, "gt", "unsling", issueID)
 }
 
 // SlingMultiple dispatches multiple issues sequentially.
@@ -66,7 +66,7 @@ func Nudge(target, message string) error {
 	if message != "" {
 		args = append(args, message)
 	}
-	return execWithTimeout(TimeoutShort, "gt", args...)
+	return execWithTimeout(timeoutShort, "gt", args...)
 }
 
 // HandoffInTmux launches `gt handoff <target>` in a new tmux pane.
@@ -89,11 +89,11 @@ func HandoffInTmux(target, projectDir string) (string, error) {
 
 // Decommission kills a polecat process by its address.
 func Decommission(address string) error {
-	return execWithTimeout(TimeoutShort, "gt", "polecat", "kill", address)
+	return execWithTimeout(timeoutShort, "gt", "polecat", "kill", address)
 }
 
 // CascadeClose closes an issue and all its children via `gt close --cascade`.
 // Requires Gas Town v0.11.0+.
 func CascadeClose(issueID string) error {
-	return execWithTimeout(TimeoutShort, "gt", "close", "--cascade", issueID)
+	return execWithTimeout(timeoutShort, "gt", "close", "--cascade", issueID)
 }

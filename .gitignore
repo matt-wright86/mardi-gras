@@ -41,3 +41,7 @@ docs/internal/
 # Dolt database files (added by bd init)
 .dolt/
 *.db
+
+# Gas Town / agent workspace artifacts
+__pycache__/
+state.json
