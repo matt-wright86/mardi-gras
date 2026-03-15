@@ -2471,9 +2471,22 @@ func (m *Model) diffIssues(newIssues []data.Issue) int {
 func (m *Model) syncSelection() {
 	if m.parade.SelectedIssue != nil {
 		m.detail.SetIssue(m.parade.SelectedIssue)
+		// Capture agent output if an agent pane is active for this issue
+		id := m.parade.SelectedIssue.ID
+		if m.inTmux {
+			if _, active := m.activeAgents[id]; active {
+				m.detail.AgentOutput = agent.CapturePane(id, 15)
+				m.detail.AgentOutputID = id
+			} else {
+				m.detail.AgentOutput = nil
+				m.detail.AgentOutputID = ""
+			}
+		}
 		return
 	}
 	m.detail.SetIssue(nil)
+	m.detail.AgentOutput = nil
+	m.detail.AgentOutputID = ""
 }
 
 // maybeFetchMolecule returns a Cmd to fetch molecule data if the selected issue
