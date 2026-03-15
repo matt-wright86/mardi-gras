@@ -1194,6 +1194,20 @@ func (g *GasTown) renderVelocity(width int) string {
 		lines = append(lines, costLine)
 	}
 
+	// Dual sparkline: created (top) vs closed (bottom) by day
+	if len(v.CreatedByDay) > 0 || len(v.ClosedByDay) > 0 {
+		sparkW := min(width-12, 14)
+		topStyle := lipgloss.NewStyle().Foreground(ui.BrightGold)
+		botStyle := lipgloss.NewStyle().Foreground(ui.BrightGreen)
+		spark := ui.DualSparkline(v.CreatedByDay, v.ClosedByDay, sparkW, topStyle, botStyle)
+		sparkLine := fmt.Sprintf("  %s %s  %s/%s",
+			labelStyle.Render("7 day"),
+			spark,
+			topStyle.Render("created"),
+			botStyle.Render("closed"))
+		lines = append(lines, sparkLine)
+	}
+
 	return strings.Join(lines, "\n")
 }
 
