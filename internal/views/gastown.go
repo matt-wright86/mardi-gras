@@ -617,7 +617,8 @@ func (g *GasTown) renderAgentRoster(width int) string {
 	agents := g.status.Agents
 	var lines []string
 
-	lines = append(lines, ui.SectionDivider("AGENTS", width, g.section == SectionAgents))
+	agentTitle := "AGENTS" + ui.Superscript(len(agents))
+	lines = append(lines, ui.SectionDivider(agentTitle, width, g.section == SectionAgents))
 
 	if len(agents) == 0 {
 		lines = append(lines, ui.GasTownLabel.Render("  No agents registered"))
@@ -792,7 +793,8 @@ func renderRigs(rigs []gastown.RigStatus, width int) string {
 func (g *GasTown) renderConvoyDetails(width int) string {
 	var lines []string
 
-	lines = append(lines, ui.SectionDivider("CONVOYS", width, g.section == SectionConvoys))
+	convoyTitle := "CONVOYS" + ui.Superscript(len(g.convoyDetails))
+	lines = append(lines, ui.SectionDivider(convoyTitle, width, g.section == SectionConvoys))
 
 	for i, c := range g.convoyDetails {
 		isSelected := g.section == SectionConvoys && i == g.convoyCursor
@@ -922,9 +924,9 @@ func (g *GasTown) renderMail(width int) string {
 		}
 	}
 
-	titleStr := "MAIL"
+	titleStr := "MAIL" + ui.Superscript(len(g.mailMessages))
 	if unread > 0 {
-		titleStr = fmt.Sprintf("MAIL (%d unread)", unread)
+		titleStr = fmt.Sprintf("MAIL%s (%d unread)", ui.Superscript(len(g.mailMessages)), unread)
 	}
 	lines = append(lines, ui.SectionDivider(titleStr, width, g.section == SectionMail))
 
