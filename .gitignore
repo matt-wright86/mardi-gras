@@ -42,7 +42,6 @@ docs/internal/
 .dolt/
 *.db
 
-# Gas Town (added by gt)
-.claude/
+# Gas Town / agent workspace artifacts
 __pycache__/
 state.json

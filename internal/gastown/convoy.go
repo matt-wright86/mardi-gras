@@ -34,7 +34,7 @@ type TrackedIssueInfo struct {
 
 // ConvoyList fetches all convoys via `gt convoy list --json`.
 func ConvoyList() ([]ConvoyDetail, error) {
-	out, err := runWithTimeout(TimeoutMedium, "gt", "convoy", "list", "--json")
+	out, err := runWithTimeout(timeoutMedium, "gt", "convoy", "list", "--json")
 	if err != nil {
 		return nil, fmt.Errorf("gt convoy list: %w", err)
 	}
@@ -47,7 +47,7 @@ func ConvoyList() ([]ConvoyDetail, error) {
 
 // ConvoyStatus fetches detailed status for a single convoy.
 func ConvoyStatus(convoyID string) (*ConvoyDetail, error) {
-	out, err := runWithTimeout(TimeoutMedium, "gt", "convoy", "status", convoyID, "--json")
+	out, err := runWithTimeout(timeoutMedium, "gt", "convoy", "status", convoyID, "--json")
 	if err != nil {
 		return nil, fmt.Errorf("gt convoy status: %w", err)
 	}
@@ -63,7 +63,7 @@ func ConvoyStatus(convoyID string) (*ConvoyDetail, error) {
 func ConvoyCreate(name string, issueIDs []string) (string, error) {
 	args := []string{"convoy", "create", name}
 	args = append(args, issueIDs...)
-	out, err := runCombinedWithTimeout(TimeoutShort, "gt", args...)
+	out, err := runCombinedWithTimeout(timeoutShort, "gt", args...)
 	if err != nil {
 		return "", fmt.Errorf("gt convoy create: %w (%s)", err, string(out))
 	}
@@ -74,7 +74,7 @@ func ConvoyCreate(name string, issueIDs []string) (string, error) {
 func ConvoyAdd(convoyID string, issueIDs []string) error {
 	args := []string{"convoy", "add", convoyID}
 	args = append(args, issueIDs...)
-	out, err := runCombinedWithTimeout(TimeoutShort, "gt", args...)
+	out, err := runCombinedWithTimeout(timeoutShort, "gt", args...)
 	if err != nil {
 		return fmt.Errorf("gt convoy add: %w (%s)", err, string(out))
 	}
@@ -83,7 +83,7 @@ func ConvoyAdd(convoyID string, issueIDs []string) error {
 
 // ConvoyClose closes a convoy.
 func ConvoyClose(convoyID string) error {
-	out, err := runCombinedWithTimeout(TimeoutShort, "gt", "convoy", "close", convoyID)
+	out, err := runCombinedWithTimeout(timeoutShort, "gt", "convoy", "close", convoyID)
 	if err != nil {
 		return fmt.Errorf("gt convoy close: %w (%s)", err, string(out))
 	}
@@ -92,7 +92,7 @@ func ConvoyClose(convoyID string) error {
 
 // ConvoyLand lands an owned convoy (cleanup worktrees + close).
 func ConvoyLand(convoyID string) error {
-	out, err := runCombinedWithTimeout(TimeoutShort, "gt", "convoy", "land", convoyID)
+	out, err := runCombinedWithTimeout(timeoutShort, "gt", "convoy", "land", convoyID)
 	if err != nil {
 		return fmt.Errorf("gt convoy land: %w (%s)", err, string(out))
 	}

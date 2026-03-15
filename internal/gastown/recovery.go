@@ -92,7 +92,7 @@ func ReleaseIssue(issueID, reason string) error {
 	if reason != "" {
 		args = append(args, "--reason", reason)
 	}
-	return execWithTimeout(TimeoutShort, "gt", args...)
+	return execWithTimeout(timeoutShort, "gt", args...)
 }
 
 // RecoverRig releases orphaned issues and optionally re-dispatches them.

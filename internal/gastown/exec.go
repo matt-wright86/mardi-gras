@@ -16,9 +16,9 @@ const (
 // Timeout tiers used at runtime. Defaults match the constants above
 // but can be overridden via SetCmdTimeout for slow connections.
 var (
-	TimeoutLong   = defaultTimeoutLong
-	TimeoutMedium = defaultTimeoutMedium
-	TimeoutShort  = defaultTimeoutShort
+	timeoutLong   = defaultTimeoutLong
+	timeoutMedium = defaultTimeoutMedium
+	timeoutShort  = defaultTimeoutShort
 )
 
 // SetCmdTimeout overrides all timeout tiers by scaling them proportionally.
@@ -29,9 +29,9 @@ func SetCmdTimeout(seconds int) {
 		return
 	}
 	scale := float64(seconds) / float64(defaultTimeoutLong/time.Second)
-	TimeoutLong = time.Duration(float64(defaultTimeoutLong) * scale)
-	TimeoutMedium = time.Duration(float64(defaultTimeoutMedium) * scale)
-	TimeoutShort = time.Duration(float64(defaultTimeoutShort) * scale)
+	timeoutLong = time.Duration(float64(defaultTimeoutLong) * scale)
+	timeoutMedium = time.Duration(float64(defaultTimeoutMedium) * scale)
+	timeoutShort = time.Duration(float64(defaultTimeoutShort) * scale)
 }
 
 // runWithTimeout executes a command with a context timeout and returns its stdout.

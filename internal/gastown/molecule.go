@@ -78,7 +78,7 @@ func (d *DAGInfo) ActiveStepID() string {
 
 // MoleculeDAG fetches the molecule DAG for a root issue via `gt mol dag <id> --json`.
 func MoleculeDAG(rootID string) (*DAGInfo, error) {
-	out, err := runWithTimeout(TimeoutMedium, "gt", "mol", "dag", rootID, "--json")
+	out, err := runWithTimeout(timeoutMedium, "gt", "mol", "dag", rootID, "--json")
 	if err != nil {
 		return nil, fmt.Errorf("gt mol dag: %w", err)
 	}
@@ -91,7 +91,7 @@ func MoleculeDAG(rootID string) (*DAGInfo, error) {
 
 // MoleculeProgressFetch fetches molecule progress via `gt mol progress <id> --json`.
 func MoleculeProgressFetch(rootID string) (*MoleculeProgress, error) {
-	out, err := runWithTimeout(TimeoutMedium, "gt", "mol", "progress", rootID, "--json")
+	out, err := runWithTimeout(timeoutMedium, "gt", "mol", "progress", rootID, "--json")
 	if err != nil {
 		return nil, fmt.Errorf("gt mol progress: %w", err)
 	}
@@ -104,7 +104,7 @@ func MoleculeProgressFetch(rootID string) (*MoleculeProgress, error) {
 
 // MoleculeStepDone marks a step as done via `gt mol step done <id> --json`.
 func MoleculeStepDone(stepID string) (*StepDoneResult, error) {
-	out, err := runWithTimeout(TimeoutShort, "gt", "mol", "step", "done", stepID, "--json")
+	out, err := runWithTimeout(timeoutShort, "gt", "mol", "step", "done", stepID, "--json")
 	if err != nil {
 		return nil, fmt.Errorf("gt mol step done: %w", err)
 	}
