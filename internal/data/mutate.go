@@ -42,6 +42,11 @@ func CreateIssue(title string, issueType IssueType, priority Priority) (string, 
 	return strings.TrimSpace(string(out)), nil
 }
 
+// UpdateTitle runs `bd update <id> --title=<title>` to change an issue's title.
+func UpdateTitle(issueID, title string) error {
+	return execWithTimeout(timeoutShort, "bd", "update", issueID, "--title="+title)
+}
+
 // AddComment runs `bd comments add <id> <body>` to add a comment to an issue.
 func AddComment(issueID, body string) error {
 	_, err := runWithTimeout(timeoutShort, "bd", "comments", "add", issueID, body)

@@ -89,6 +89,10 @@ type Model struct {
 	creating   bool
 	createForm components.CreateForm
 
+	// Issue edit form
+	editing  bool
+	editForm components.EditForm
+
 	// Command palette
 	showPalette bool
 	palette     components.Palette
@@ -548,6 +552,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Handle edit form result
+	if result, ok := msg.(components.EditFormResult); ok {
+		m.editing = false
+		if result.Cancelled {
+			return m, nil
+		}
+		id := result.IssueID
+		title := result.Title
+		priority := components.ParsePriority(result.Priority)
+		return m, func() tea.Msg {
+			if err := data.UpdateTitle(id, title); err != nil {
+				return mutateResultMsg{issueID: id, action: "edit title", err: err}
+			}
+			if err := data.SetPriority(id, priority); err != nil {
+				return mutateResultMsg{issueID: id, action: "edit priority", err: err}
+			}
+			return mutateResultMsg{issueID: id, action: "updated", err: nil}
+		}
+	}
+
 	// Handle palette result
 	if result, ok := msg.(components.PaletteResult); ok {
 		m.showPalette = false
@@ -590,6 +614,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		logRoute("palette forward")
 		var cmd tea.Cmd
 		m.palette, cmd = m.palette.Update(msg)
+		return m, cmd
+	}
+
+	// Forward all messages to edit form when active
+	if m.editing {
+		if km, ok := msg.(tea.KeyPressMsg); ok && km.String() == "ctrl+c" {
+			logRoute("editForm ctrl+c -> quit")
+			return m, tea.Quit
+		}
+		logRoute("editForm forward")
+		var cmd tea.Cmd
+		m.editForm, cmd = m.editForm.Update(msg)
 		return m, cmd
 	}
 
@@ -1705,6 +1741,15 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.creating = true
 		m.createForm = components.NewCreateForm(m.width, m.height)
 		return m, m.createForm.Init()
+
+	case "e": // Edit selected issue
+		issue := m.parade.SelectedIssue
+		if issue == nil {
+			return m, nil
+		}
+		m.editing = true
+		m.editForm = components.NewEditForm(m.width, m.height, issue)
+		return m, m.editForm.Init()
 
 	case "r": // Comment (remark)
 		issue := m.parade.SelectedIssue
@@ -2874,6 +2919,15 @@ func (m Model) View() tea.View {
 		m.help.SetSize(m.width, m.height)
 		helpModal := m.help.View()
 		return altView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, helpModal))
+	}
+
+	if m.editing {
+		formTitle := ui.HelpTitle.Render("[ EDIT ISSUE ]")
+		formBody := m.editForm.View()
+		formHint := ui.HelpHint.Render("esc to cancel  enter to save")
+		formContent := lipgloss.JoinVertical(lipgloss.Left, formTitle, "", formBody, "", formHint)
+		formBox := ui.HelpOverlayBg.Width(m.width - 8).Render(formContent)
+		return altView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, formBox))
 	}
 
 	if m.creating {
