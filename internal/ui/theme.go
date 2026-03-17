@@ -75,6 +75,7 @@ var (
 	StateSpawn     = lipgloss.Color("#3498DB") // Cyan — session starting
 	StateGate      = BrightGold                // Waiting on external trigger
 	StateFixNeeded = lipgloss.Color("#E056A0") // Pink — review feedback, needs rework
+	StatePropelled = lipgloss.Color("#00CED1") // Dark turquoise — ACP propulsion, output suppressed
 
 	// HOP quality colors
 	QualityExcellent = BrightGold                // 0.9+
@@ -142,6 +143,8 @@ func AgentStateColor(state string) color.Color {
 		return StateGate
 	case "fix_needed":
 		return StateFixNeeded
+	case "propelled":
+		return StatePropelled
 	case "paused", "muted":
 		return Dim
 	default:

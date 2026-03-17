@@ -72,6 +72,7 @@ func TestAgentStateColor(t *testing.T) {
 		{"fix_needed", "fix_needed", StateFixNeeded},
 		{"paused", "paused", Dim},
 		{"muted", "muted", Dim},
+		{"propelled", "propelled", StatePropelled},
 		{"unknown falls back to idle", "unknown", StateIdle},
 		{"empty falls back to idle", "", StateIdle},
 	}
@@ -97,6 +98,7 @@ func TestAgentStateColorDistinctCategories(t *testing.T) {
 		"awaiting-gate": AgentStateColor("awaiting-gate"),
 		"fix_needed":    AgentStateColor("fix_needed"),
 		"paused":        AgentStateColor("paused"),
+		"propelled":     AgentStateColor("propelled"),
 	}
 
 	// Verify distinct colors across categories (some share intentionally)
@@ -111,6 +113,9 @@ func TestAgentStateColorDistinctCategories(t *testing.T) {
 		{"fix_needed", "backoff"},
 		{"fix_needed", "working"},
 		{"spawning", "idle"},
+		{"propelled", "working"},
+		{"propelled", "idle"},
+		{"propelled", "spawning"},
 	}
 	for _, pair := range pairs {
 		if colors[pair[0]] == colors[pair[1]] {
