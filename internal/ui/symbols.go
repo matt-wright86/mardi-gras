@@ -73,6 +73,7 @@ const (
 	SymGate          = "◷" // alias of SymDueDate — waiting on gate
 	SymPaused        = "⏸" // alias of SymDeferred — intentionally suspended
 	SymFixNeeded     = "🔧" // review feedback — needs rework
+	SymPropelled     = "⚡" // ACP propulsion — output suppressed
 	SymProgress      = "█"
 	SymProgressEmpty = "░"
 	SymDog           = "🐕"
