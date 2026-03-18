@@ -9,7 +9,12 @@ import (
 )
 
 const (
-	oscGuardWindow     = 500 * time.Millisecond
+	// oscGuardWindow is the suppression window opened when a burst of
+	// fragmented terminal reply traffic is detected. Empirically, OSC 11
+	// + DECRPM reply bursts complete within ~60ms. The previous 500ms
+	// value ate real keypresses typed at normal speed (~120ms+ apart).
+	// See: charmbracelet/bubbletea#1590, docs/internal/osc-leak-investigation.md
+	oscGuardWindow     = 80 * time.Millisecond
 	oscGuardTailWindow = 40 * time.Millisecond
 )
 
@@ -116,6 +121,7 @@ func (g *OSCGuard) filterMsg(msg tea.Msg) tea.Msg {
 	if kp.Mod&tea.ModCtrl != 0 {
 		g.lastAnyKeyTime = now
 		g.seqLen = 0
+		dbg("  GUARD-PASS ctrl combo: %q", kp.String())
 		return msg
 	}
 
@@ -134,6 +140,7 @@ func (g *OSCGuard) filterMsg(msg tea.Msg) tea.Msg {
 	if !isPrintableKey(kp) {
 		g.lastAnyKeyTime = now
 		g.seqLen = 0
+		dbg("  GUARD-PASS non-printable: %q", kp.String())
 		return msg
 	}
 
@@ -207,6 +214,7 @@ func (g *OSCGuard) filterMsg(msg tea.Msg) tea.Msg {
 		return nil
 	}
 
+	dbg("  GUARD-PASS printable: %q (charGap=%v navGap=%v acc=%q)", kp.String(), charGap, navGap, acc)
 	return msg
 }
 
