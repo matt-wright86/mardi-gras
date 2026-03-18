@@ -6,6 +6,7 @@
 [![Beads](https://img.shields.io/badge/Beads-%E2%89%A5%20v0.60-blueviolet)](https://github.com/steveyegge/beads)
 [![Gas Town](https://img.shields.io/badge/Gas%20Town-%E2%89%A5%20v0.12-blue)](https://github.com/steveyegge/gastown)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![codecov](https://codecov.io/gh/quietpublish/mardi-gras/graph/badge.svg)](https://codecov.io/gh/quietpublish/mardi-gras)
 
 **Your Beads issues deserve a parade — not a spreadsheet.**
 

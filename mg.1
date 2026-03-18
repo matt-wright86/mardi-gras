@@ -1,4 +1,4 @@
-.TH MG 1 "2026-02-22" "mardi-gras" "User Commands"
+.TH MG 1 "2026-03-17" "mardi-gras" "User Commands"
 .SH NAME
 mg \- terminal UI for Beads issues
 .SH SYNOPSIS
@@ -9,6 +9,9 @@ mg \- terminal UI for Beads issues
 .IR types ]
 .RB [ \-\-status ]
 .RB [ \-\-version ]
+.RB [ \-\-no\-animations ]
+.RB [ \-\-cmd\-timeout
+.IR seconds ]
 .SH DESCRIPTION
 .B mg
 (Mardi Gras) is a terminal UI that presents
@@ -16,18 +19,29 @@ mg \- terminal UI for Beads issues
 issues as a parade: what's moving, what's waiting,
 what's blocked, and what's done.
 .PP
-It reads
+It auto\-detects the data source with no daemon or config file.
+When
+.B bd
+is on PATH (Beads v0.60+),
+.B mg
+uses
+.B bd list \-\-json
+(CLI mode).
+Otherwise it falls back to reading
 .I .beads/issues.jsonl
-directly with no daemon or config file. The file is polled automatically so
-changes made by agents, scripts, or
+directly (JSONL mode).
+Both modes poll for changes automatically so edits by agents, scripts, or
 .B bd
 commands appear in real time.
 .PP
 When run without
 .BR \-\-path ,
 .B mg
-walks up from the current working directory looking for
-.IR .beads/issues.jsonl .
+walks up from the current working directory looking for a
+.I .beads/
+directory (CLI mode) or
+.I .beads/issues.jsonl
+(JSONL mode).
 .SH OPTIONS
 .TP
 .BI \-\-path " file"
@@ -208,6 +222,13 @@ Integer seconds to scale all external command timeouts (max 300).
 Equivalent to
 .BR \-\-cmd\-timeout .
 .TP
+.B MG_DEBUG
+When set to
+.BR 1 ,
+enables debug logging to
+.I mg\-debug.log
+in the working directory.
+.TP
 .B TMUX
 When set (and
 .B tmux
@@ -221,8 +242,13 @@ Normal exit.
 Error (missing file, bad path, etc.).
 .SH FILES
 .TP
-.I .beads/issues.jsonl
-Beads issue data. Searched upward from the working directory.
+.I .beads/
+Beads project directory. Searched upward from the working directory.
+When
+.B bd
+is on PATH, CLI mode is used; otherwise
+.I issues.jsonl
+inside this directory is read directly.
 .SH EXAMPLES
 Auto\-detect the nearest Beads project:
 .PP
@@ -258,6 +284,7 @@ set -g status-right "#(mg --status)"
 .RE
 .SH SEE ALSO
 .BR bd (1),
+.BR gt (1),
 .BR tmux (1),
 .BR claude (1)
 .SH AUTHORS
