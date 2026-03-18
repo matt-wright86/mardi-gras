@@ -21,6 +21,8 @@ archives:
       - goos: windows
         formats: ['zip']
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - mg.1
 
 checksum:
   name_template: 'checksums.txt'
@@ -35,6 +37,7 @@ brews:
     license: "MIT"
     install: |
       bin.install "mg"
+      man1.install "mg.1"
 
 changelog:
   sort: asc
