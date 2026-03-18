@@ -61,6 +61,8 @@ func logMsg(msg tea.Msg) {
 		// too frequent, skip
 	case gasTownTickMsg:
 		// too frequent, skip
+	case tea.EnvMsg:
+		debugLog.Printf("Msg        tea.EnvMsg (env vars omitted)")
 	default:
 		debugLog.Printf("Msg        %T  %+v", msg, msg)
 	}

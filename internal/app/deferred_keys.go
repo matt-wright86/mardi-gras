@@ -6,7 +6,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-const deferredKeyDelay = 60 * time.Millisecond
+// deferredKeyDelay is how long printable keys are held before delivery,
+// allowing the OSC guard to detect fragment companions. The OSC 11 reply
+// head ("]") arrives ~90ms after the triggering key; the burst follows
+// within 2ms. 30ms is enough for fragment detection without adding
+// perceptible latency to navigation.
+const deferredKeyDelay = 30 * time.Millisecond
 
 type deferredKeyMsg struct {
 	id uint64
@@ -34,7 +39,7 @@ func (m Model) handleKeyPress(msg tea.KeyPressMsg, allowDeferredBuffer bool) (te
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
-		dbg("  SUPPRESSED startup key: %q", msg.String())
+		dbg("  SUPPRESSED startup key: %q (age=%v)", msg.String(), time.Since(m.startedAt))
 		return m, nil
 	}
 
@@ -54,6 +59,7 @@ func (m Model) handleKeyPress(msg tea.KeyPressMsg, allowDeferredBuffer bool) (te
 	}
 
 	if allowDeferredBuffer && m.shouldDeferKey(msg) {
+		dbg("  DEFER staging key: %q (pendingCount=%d)", msg.String(), len(m.pendingKeys))
 		return m.handleDeferredKeyPress(msg)
 	}
 
@@ -82,7 +88,10 @@ func (m Model) handleDeferredKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 	pending := m.pendingKeys[0]
 
 	if m.oscGuard != nil && (m.oscGuard.SuspiciousSince(pending.stagedAt) || isLikelyDeferredFragmentPair(pending.key, msg)) {
-		dbg("  GUARD-DEFER dropped: %q + %q", pending.key.String(), msg.String())
+		dbg("  DEFER-PAIR dropped: pending=%q + new=%q (suspicious=%v fragmentPair=%v)",
+			pending.key.String(), msg.String(),
+			m.oscGuard.SuspiciousSince(pending.stagedAt),
+			isLikelyDeferredFragmentPair(pending.key, msg))
 		m.clearPendingKeys()
 		m.oscGuard.NoteAppSuppression()
 		return m, nil
@@ -105,17 +114,20 @@ func (m Model) handleDeferredKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 func (m Model) resolveDeferredKey(msg deferredKeyMsg) (Model, tea.KeyPressMsg, bool) {
 	idx := m.findPendingKeyIndex(msg.id)
 	if idx < 0 {
+		dbg("  DEFER-RESOLVE id=%d: not found (already consumed)", msg.id)
 		return m, tea.KeyPressMsg{}, false
 	}
 
 	pending := m.pendingKeys[idx]
+	age := time.Since(pending.stagedAt)
 	m.pendingKeys = append(m.pendingKeys[:idx], m.pendingKeys[idx+1:]...)
 
 	if m.oscGuard != nil && m.oscGuard.SuspiciousSince(pending.stagedAt) {
-		dbg("  GUARD-DEFER dropped: %q", pending.key.String())
+		dbg("  DEFER-RESOLVE id=%d key=%q: DROPPED by guard (age=%v)", msg.id, pending.key.String(), age)
 		return m, tea.KeyPressMsg{}, false
 	}
 
+	dbg("  DEFER-RESOLVE id=%d key=%q: DELIVERED (age=%v)", msg.id, pending.key.String(), age)
 	return m, pending.key, true
 }
 
