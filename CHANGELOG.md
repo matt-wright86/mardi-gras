@@ -2,6 +2,19 @@
 
 All notable changes to Mardi Gras are documented here. For full release details including binaries and install instructions, see the [Releases](https://github.com/quietpublish/mardi-gras/releases) page.
 
+## v0.14.0 (2026-03-20)
+
+### Added
+- **Assign to crew** — when Gas Town is available, the issue create form (`N`) shows a "Crew" field. Enter a crew member name to create the issue, hook it, and nudge the agent in one step via `gt assign`. The field is optional — leave it empty for a normal `bd create`.
+
+### Changed
+- **Documentation restructured** — README slimmed from 430 to 211 lines. Detailed docs moved to topic-based files under `docs/`:
+  - [Keybindings](docs/keybindings.md) — full shortcut reference
+  - [Parade and filtering](docs/filtering.md) — sections, detail panel, filtering syntax, command palette
+  - [Agent integration](docs/agents.md) — runtime detection, tmux dispatch
+  - [Gas Town integration](docs/gastown.md) — sling, assign, convoys, operational intelligence, problems
+- Updated hero screenshot to current UI.
+
 ## v0.13.1 (2026-03-18)
 
 ### Fixed
