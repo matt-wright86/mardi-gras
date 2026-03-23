@@ -59,6 +59,58 @@ func TestFileChangedMsgPreservesSelectionAndClosedState(t *testing.T) {
 	}
 }
 
+func TestFileChangedMsgAppliesPendingSelectionOverride(t *testing.T) {
+	issues := []data.Issue{
+		testIssue("open-1", data.StatusOpen),
+		testIssue("open-2", data.StatusOpen),
+	}
+
+	m := New(issues, data.Source{}, data.DefaultBlockingTypes)
+	m.startedAt = time.Now().Add(-time.Second)
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	got := model.(Model)
+
+	if got.parade.SelectedIssue == nil || got.parade.SelectedIssue.ID != "open-1" {
+		t.Fatalf("expected initial selection open-1, got %+v", got.parade.SelectedIssue)
+	}
+
+	got.pendingSelectID = "open-3"
+	refreshed := []data.Issue{
+		testIssue("open-2", data.StatusOpen),
+		testIssue("open-3", data.StatusOpen),
+	}
+	model, _ = got.Update(data.FileChangedMsg{Issues: refreshed})
+	got = model.(Model)
+
+	if got.parade.SelectedIssue == nil || got.parade.SelectedIssue.ID != "open-3" {
+		t.Fatalf("expected pending selection open-3 after refresh, got %+v", got.parade.SelectedIssue)
+	}
+	if got.pendingSelectID != "" {
+		t.Fatalf("expected pendingSelectID to be cleared, got %q", got.pendingSelectID)
+	}
+}
+
+func TestInitialLayoutExcludesHiddenTypesButKeepsDetailIssueMap(t *testing.T) {
+	issues := []data.Issue{
+		testIssue("open-1", data.StatusOpen),
+		testIssue("epic-1", data.StatusOpen),
+	}
+	issues[1].IssueType = data.TypeEpic
+
+	m := New(issues, data.Source{}, data.DefaultBlockingTypes, map[string]bool{"epic": true})
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	got := model.(Model)
+
+	for _, item := range got.parade.Items {
+		if item.Issue != nil && item.Issue.ID == "epic-1" {
+			t.Fatal("expected excluded epic to be hidden from parade")
+		}
+	}
+	if _, ok := got.detail.IssueMap["epic-1"]; !ok {
+		t.Fatal("expected excluded epic to remain in detail issue map")
+	}
+}
+
 func TestFilteringModeAcceptsTypedInput(t *testing.T) {
 	issues := []data.Issue{
 		testIssue("alpha-1", data.StatusOpen),

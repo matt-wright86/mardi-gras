@@ -6,6 +6,21 @@ import (
 	"github.com/sahilm/fuzzy"
 )
 
+// ExcludeByType returns issues whose types are not excluded.
+func ExcludeByType(issues []Issue, excludeTypes map[string]bool) []Issue {
+	if len(excludeTypes) == 0 {
+		return issues
+	}
+
+	filtered := make([]Issue, 0, len(issues))
+	for _, issue := range issues {
+		if !excludeTypes[strings.ToLower(string(issue.IssueType))] {
+			filtered = append(filtered, issue)
+		}
+	}
+	return filtered
+}
+
 // FilterIssues returns a new slice of issues that match the search query.
 // It supports explicit tokens (type:bug, p1, priority:high) and fuzzy free-text
 // search on ID and Title. All tokens in the query must match (AND logic).
