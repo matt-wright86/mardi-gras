@@ -61,6 +61,12 @@ func ConvoyStatus(convoyID string) (*ConvoyDetail, error) {
 // ConvoyCreate creates a new convoy tracking the given issues.
 // Returns the new convoy ID.
 func ConvoyCreate(name string, issueIDs []string) (string, error) {
+	name = sanitizeText(name, maxTextLen)
+	for _, id := range issueIDs {
+		if err := validateIssueID(id); err != nil {
+			return "", err
+		}
+	}
 	args := []string{"convoy", "create", "--", name}
 	args = append(args, issueIDs...)
 	out, err := runCombinedWithTimeout(timeoutShort, "gt", args...)

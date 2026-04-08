@@ -151,6 +151,11 @@ type Model struct {
 	// Data source mode (JSONL file watcher vs bd CLI polling)
 	sourceMode data.SourceMode
 
+	// Dolt resilience state machine
+	sourceHealth   data.SourceHealth
+	jsonlPath      string // Cached JSONL path resolved on first fallback probe
+	healthChecking bool   // True when CLIHealthCheck side-poll is active
+
 	// Startup: issue ID from bd show --current, consumed after first parade build
 	pendingCurrentID string
 	pendingSelectID  string
@@ -193,6 +198,12 @@ type Model struct {
 
 	// When true, confetti and header shimmer animations are disabled.
 	noAnimations bool
+
+	// Transient flag set by rebuildParade when the previously-selected issue ID
+	// was not found in the new issue set. Cleared by the FileChangedMsg handler
+	// after firing a toast.
+	selectionLost bool
+	lostIssueID   string
 }
 
 // New creates a new app model from loaded issues.
@@ -307,7 +318,12 @@ func fetchBeadsContext() tea.Msg {
 }
 
 // startPoll returns the appropriate polling Cmd based on sourceMode.
+// When in fallback mode the JSONL file is watched; CLIHealthCheck is managed
+// separately via the CLIHealthCheckMsg handler.
 func (m Model) startPoll() tea.Cmd {
+	if m.sourceHealth.InFallback() {
+		return data.WatchFile(m.watchPath, m.lastFileMod)
+	}
 	if m.sourceMode == data.SourceCLI {
 		return data.PollCLI(m.projectDir)
 	}
@@ -882,6 +898,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case data.FileChangedMsg:
+		m.sourceHealth = m.sourceHealth.RecordSuccess()
 		cmds := []tea.Cmd{
 			m.startPoll(),
 			m.gatedPollAgentState(),
@@ -924,6 +941,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastFileMod = msg.LastMod
 		}
 		m.rebuildParade()
+		if m.selectionLost {
+			lostID := m.lostIssueID
+			m.selectionLost = false
+			m.lostIssueID = ""
+			toast, toastCmd := components.ShowToast(
+				fmt.Sprintf("Issue %s removed \u2014 moved to next", lostID),
+				components.ToastInfo, toastDuration,
+			)
+			m.toast = toast
+			cmds = append(cmds, toastCmd)
+		}
 		m.recomputeVelocity()
 		cmds = append(cmds, m.detailFetchBatch()...)
 		return m, tea.Batch(cmds...)
@@ -935,14 +963,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.startPoll(), m.gatedPollAgentState())
 
 	case data.FileWatchErrorMsg:
+		m.sourceHealth = m.sourceHealth.RecordFailure(msg.Err)
 		cmds := []tea.Cmd{m.startPoll(), m.gatedPollAgentState()}
-		label := fmt.Sprintf("Load failed: %s", msg.Err)
-		if m.sourceMode == data.SourceCLI {
-			label = fmt.Sprintf("bd list failed: %s", msg.Err)
+
+		// Toast suppression: only show on the first failure.
+		if m.sourceHealth.ShouldShowToast() {
+			label := fmt.Sprintf("Load failed: %s", msg.Err)
+			if m.sourceMode == data.SourceCLI {
+				label = fmt.Sprintf("bd list failed: %s", msg.Err)
+			}
+			toast, toastCmd := components.ShowToast(label, components.ToastError, toastDuration)
+			m.toast = toast
+			cmds = append(cmds, toastCmd)
 		}
-		toast, toastCmd := components.ShowToast(label, components.ToastError, toastDuration)
-		m.toast = toast
-		cmds = append(cmds, toastCmd)
+
+		// On entering degraded: probe for a fresh JSONL fallback file.
+		if m.sourceHealth.State == data.HealthDegraded && m.sourceHealth.ConsecFailures == data.DegradeThreshold {
+			if path, _, ok := data.ProbeJSONLFallback(m.projectDir); ok {
+				m.sourceHealth.State = data.HealthFallback
+				m.jsonlPath = path
+				m.sourceMode = data.SourceJSONL
+				m.watchPath = path
+				if !m.healthChecking {
+					m.healthChecking = true
+					cmds = append(cmds, data.CLIHealthCheck(m.projectDir))
+				}
+				toast, toastCmd := components.ShowToast(
+					"Switched to issues.jsonl fallback (bd unavailable)",
+					components.ToastWarn, toastDuration,
+				)
+				m.toast = toast
+				cmds = append(cmds, toastCmd)
+			}
+			// If JSONL probe fails: stay degraded with last-good data.
+		}
 		return m, tea.Batch(cmds...)
 
 	case agentLaunchedMsg:
@@ -1009,6 +1063,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+
+	case data.CLIHealthCheckMsg:
+		if msg.Err != nil {
+			m.sourceHealth = m.sourceHealth.RecordFailure(msg.Err)
+			// Keep probing until CLI recovers.
+			return m, data.CLIHealthCheck(m.projectDir)
+		}
+		m.sourceHealth = m.sourceHealth.RecordSuccess()
+		if m.sourceHealth.State == data.HealthHealthy {
+			// Recovery complete: switch back to CLI.
+			m.sourceMode = data.SourceCLI
+			m.watchPath = ""
+			m.healthChecking = false
+			m.issues = msg.Issues
+			m.groups = data.GroupByParade(msg.Issues, m.blockingTypes)
+			m.lastFileMod = time.Now()
+			m.rebuildParade()
+			toast, toastCmd := components.ShowToast(
+				"bd recovered \u2014 switched back to CLI",
+				components.ToastSuccess, toastDuration,
+			)
+			m.toast = toast
+			return m, tea.Batch(m.startPoll(), m.gatedPollAgentState(), toastCmd)
+		}
+		// Still recovering (1 success counted); keep probing.
+		return m, data.CLIHealthCheck(m.projectDir)
 
 	case slingResultMsg:
 		if msg.err != nil {
@@ -2685,9 +2765,18 @@ func (m *Model) layout() {
 	}
 }
 
-// rebuildParade reconstructs the parade from current issues, preserving selection if possible.
+// rebuildParade owns the full filter → layout → restore-selection → sync cycle.
+//
+// Callers must NOT call syncSelection after rebuildParade — it is already done
+// here. The sync contract is: parade.SelectedIssue → detail.SetIssue → detail
+// fetches markdown/molecule on-demand.
+//
+// When the previously-selected issue ID is absent from the new issue set,
+// rebuildParade falls back to the nearest selectable item and sets
+// m.selectionLost/m.lostIssueID so the caller can fire an informational toast.
 func (m *Model) rebuildParade() {
 	oldSelectedID := ""
+	oldCursor := m.parade.Cursor
 	if m.parade.SelectedIssue != nil {
 		oldSelectedID = m.parade.SelectedIssue.ID
 	}
@@ -2731,7 +2820,14 @@ func (m *Model) rebuildParade() {
 	if oldShowClosed {
 		m.parade.ToggleClosed()
 	}
-	m.restoreParadeSelection(oldSelectedID)
+	found := m.restoreParadeSelection(oldSelectedID)
+	if !found && oldSelectedID != "" {
+		// The previously-selected issue is gone. Fall back to the nearest
+		// selectable item relative to the old cursor position.
+		m.selectionLost = true
+		m.lostIssueID = oldSelectedID
+		m.selectNearestSelectable(oldCursor)
+	}
 	if m.pendingSelectID != "" {
 		m.restoreParadeSelection(m.pendingSelectID)
 		m.pendingSelectID = ""
@@ -2748,9 +2844,10 @@ func (m *Model) rebuildParade() {
 }
 
 // restoreParadeSelection restores selection by issue ID when possible.
-func (m *Model) restoreParadeSelection(issueID string) {
+// Returns true if the ID was found and selection was restored, false if not found.
+func (m *Model) restoreParadeSelection(issueID string) bool {
 	if issueID == "" {
-		return
+		return false
 	}
 	for i, item := range m.parade.Items {
 		if item.IsHeader || item.Issue == nil || item.Issue.ID != issueID {
@@ -2776,8 +2873,46 @@ func (m *Model) restoreParadeSelection(issueID string) {
 		if m.parade.ScrollOffset < 0 {
 			m.parade.ScrollOffset = 0
 		}
+		return true
+	}
+	return false
+}
+
+// selectNearestSelectable moves the cursor to the selectable item nearest to
+// hintCursor in the current parade item list. Used as a fallback when the
+// previously-selected issue has been removed from the issue set. If the parade
+// contains no selectable items, selection is cleared.
+func (m *Model) selectNearestSelectable(hintCursor int) {
+	items := m.parade.Items
+	if len(items) == 0 {
+		m.parade.SelectedIssue = nil
 		return
 	}
+
+	// Clamp the hint to valid range.
+	if hintCursor >= len(items) {
+		hintCursor = len(items) - 1
+	}
+	if hintCursor < 0 {
+		hintCursor = 0
+	}
+
+	// Walk outward from hintCursor to find the nearest selectable item.
+	for delta := 0; delta < len(items); delta++ {
+		for _, candidate := range []int{hintCursor - delta, hintCursor + delta} {
+			if candidate < 0 || candidate >= len(items) {
+				continue
+			}
+			if !items[candidate].IsHeader && !items[candidate].IsFooter {
+				m.parade.Cursor = candidate
+				m.parade.SelectedIssue = items[candidate].Issue
+				return
+			}
+		}
+	}
+
+	// No selectable item found (empty parade after filtering).
+	m.parade.SelectedIssue = nil
 }
 
 // recomputeVelocity recalculates velocity metrics and scorecards from current data
@@ -3061,6 +3196,7 @@ func (m Model) View() tea.View {
 		footer.PathExplicit = m.pathExplicit
 		footer.SourceMode = m.sourceMode
 		footer.BeadsContext = m.beadsContext
+		footer.SourceHealth = &m.sourceHealth
 		bottomBar = footer.View()
 	}
 
