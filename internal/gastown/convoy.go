@@ -105,6 +105,24 @@ func ConvoyClose(convoyID string) error {
 	return nil
 }
 
+// ConvoyWatch subscribes to completion notifications for a convoy.
+func ConvoyWatch(convoyID string) error {
+	out, err := runCombinedWithTimeout(timeoutShort, "gt", "convoy", "watch", "--", convoyID)
+	if err != nil {
+		return fmt.Errorf("gt convoy watch: %w (%s)", err, sanitizeOutput(out))
+	}
+	return nil
+}
+
+// ConvoyUnwatch removes completion notification subscription for a convoy.
+func ConvoyUnwatch(convoyID string) error {
+	out, err := runCombinedWithTimeout(timeoutShort, "gt", "convoy", "unwatch", "--", convoyID)
+	if err != nil {
+		return fmt.Errorf("gt convoy unwatch: %w (%s)", err, sanitizeOutput(out))
+	}
+	return nil
+}
+
 // ConvoyLand lands an owned convoy (cleanup worktrees + close).
 func ConvoyLand(convoyID string) error {
 	out, err := runCombinedWithTimeout(timeoutShort, "gt", "convoy", "land", "--", convoyID)

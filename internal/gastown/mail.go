@@ -89,3 +89,12 @@ func MailMarkRead(messageID string) error {
 	}
 	return nil
 }
+
+// MailMarkAllRead marks all messages as read via `gt mail mark-read --all`.
+func MailMarkAllRead() error {
+	out, err := runCombinedWithTimeout(timeoutShort, "gt", "mail", "mark-read", "--all")
+	if err != nil {
+		return fmt.Errorf("gt mail mark-read --all: %w (%s)", err, sanitizeOutput(out))
+	}
+	return nil
+}

@@ -495,6 +495,20 @@ type mailMarkReadResultMsg struct {
 	err       error
 }
 
+type mailMarkAllReadResultMsg struct {
+	err error
+}
+
+type convoyWatchResultMsg struct {
+	convoyID string
+	err      error
+}
+
+type convoyUnwatchResultMsg struct {
+	convoyID string
+	err      error
+}
+
 type moleculeDAGMsg struct {
 	issueID  string
 	dag      *gastown.DAGInfo
@@ -1091,21 +1105,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, data.CLIHealthCheck(m.projectDir)
 
 	case slingResultMsg:
-		if msg.err != nil {
-			toast, cmd := components.ShowToast(
-				fmt.Sprintf("Sling failed for %s: %s", msg.issueID, msg.err),
-				components.ToastError, toastDuration,
-			)
-			m.toast = toast
-			return m, cmd
-		}
 		label := fmt.Sprintf("Slung %s to polecat", msg.issueID)
 		if msg.formula != "" {
 			label = fmt.Sprintf("Slung %s with %s formula", msg.issueID, msg.formula)
 		}
-		toast, cmd := components.ShowToast(label, components.ToastSuccess, toastDuration)
-		m.toast = toast
-		return m, tea.Batch(cmd, m.gatedPollAgentState())
+		return m.toastResult(msg.err,
+			fmt.Sprintf("Sling failed for %s", msg.issueID),
+			label, m.gatedPollAgentState())
 
 	case formulaListMsg:
 		if msg.err != nil || len(msg.formulas) == 0 {
@@ -1147,47 +1153,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.palette.Init()
 
 	case unslingResultMsg:
-		if msg.err != nil {
-			toast, cmd := components.ShowToast(
-				fmt.Sprintf("Unsling failed for %s: %s", msg.issueID, msg.err),
-				components.ToastError, toastDuration,
-			)
-			m.toast = toast
-			return m, cmd
-		}
-		toast, cmd := components.ShowToast(
+		return m.toastResult(msg.err,
+			fmt.Sprintf("Unsling failed for %s", msg.issueID),
 			fmt.Sprintf("Unslung %s", msg.issueID),
-			components.ToastSuccess, toastDuration,
-		)
-		m.toast = toast
-		return m, tea.Batch(cmd, m.gatedPollAgentState())
+			m.gatedPollAgentState())
 
 	case multiSlingResultMsg:
-		if msg.err != nil {
-			toast, cmd := components.ShowToast(
-				fmt.Sprintf("Multi-sling failed: %s", msg.err),
-				components.ToastError, toastDuration,
-			)
-			m.toast = toast
-			return m, cmd
-		}
 		label := fmt.Sprintf("Slung %d issues", msg.count)
 		if msg.formula != "" {
 			label = fmt.Sprintf("Slung %d issues with %s formula", msg.count, msg.formula)
 		}
-		toast, cmd := components.ShowToast(label, components.ToastSuccess, toastDuration)
-		m.toast = toast
-		return m, tea.Batch(cmd, m.gatedPollAgentState())
+		return m.toastResult(msg.err, "Multi-sling failed", label, m.gatedPollAgentState())
 
 	case nudgeResultMsg:
-		if msg.err != nil {
-			toast, cmd := components.ShowToast(
-				fmt.Sprintf("Nudge failed for %s: %s", msg.target, msg.err),
-				components.ToastError, toastDuration,
-			)
-			m.toast = toast
-			return m, cmd
-		}
 		label := fmt.Sprintf("Nudged %s", msg.target)
 		if msg.message != "" {
 			display := msg.message
@@ -1196,41 +1174,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			label = fmt.Sprintf("Nudged %s: %s", msg.target, display)
 		}
-		toast, cmd := components.ShowToast(label, components.ToastSuccess, toastDuration)
-		m.toast = toast
-		return m, cmd
+		return m.toastResult(msg.err,
+			fmt.Sprintf("Nudge failed for %s", msg.target), label)
 
 	case handoffResultMsg:
-		if msg.err != nil {
-			toast, cmd := components.ShowToast(
-				fmt.Sprintf("Handoff failed for %s: %s", msg.target, msg.err),
-				components.ToastError, toastDuration,
-			)
-			m.toast = toast
-			return m, cmd
-		}
-		toast, cmd := components.ShowToast(
+		return m.toastResult(msg.err,
+			fmt.Sprintf("Handoff failed for %s", msg.target),
 			fmt.Sprintf("Handoff initiated for %s", msg.target),
-			components.ToastSuccess, toastDuration,
-		)
-		m.toast = toast
-		return m, tea.Batch(cmd, m.gatedPollAgentState())
+			m.gatedPollAgentState())
 
 	case decommissionResultMsg:
-		if msg.err != nil {
-			toast, cmd := components.ShowToast(
-				fmt.Sprintf("Decommission failed for %s: %s", msg.address, msg.err),
-				components.ToastError, toastDuration,
-			)
-			m.toast = toast
-			return m, cmd
-		}
-		toast, cmd := components.ShowToast(
+		return m.toastResult(msg.err,
+			fmt.Sprintf("Decommission failed for %s", msg.address),
 			fmt.Sprintf("Decommissioned %s", msg.address),
-			components.ToastSuccess, toastDuration,
-		)
-		m.toast = toast
-		return m, tea.Batch(cmd, m.gatedPollAgentState())
+			m.gatedPollAgentState())
 
 	case convoyListMsg:
 		if msg.err == nil {
@@ -1239,52 +1196,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case convoyCreateResultMsg:
-		if msg.err != nil {
-			toast, cmd := components.ShowToast(
-				fmt.Sprintf("Convoy create failed: %s", msg.err),
-				components.ToastError, toastDuration,
-			)
-			m.toast = toast
-			return m, cmd
-		}
-		toast, cmd := components.ShowToast(
+		return m.toastResult(msg.err,
+			"Convoy create failed",
 			fmt.Sprintf("Convoy %q created", msg.name),
-			components.ToastSuccess, toastDuration,
-		)
-		m.toast = toast
-		return m, tea.Batch(cmd, fetchConvoyList)
+			fetchConvoyList)
 
 	case convoyLandResultMsg:
-		if msg.err != nil {
-			toast, cmd := components.ShowToast(
-				fmt.Sprintf("Convoy land failed: %s", msg.err),
-				components.ToastError, toastDuration,
-			)
-			m.toast = toast
-			return m, cmd
-		}
-		toast, cmd := components.ShowToast(
+		return m.toastResult(msg.err,
+			"Convoy land failed",
 			fmt.Sprintf("Convoy %s landed", msg.convoyID),
-			components.ToastSuccess, toastDuration,
-		)
-		m.toast = toast
-		return m, tea.Batch(cmd, fetchConvoyList, m.gatedPollAgentState())
+			fetchConvoyList, m.gatedPollAgentState())
 
 	case convoyCloseResultMsg:
-		if msg.err != nil {
-			toast, cmd := components.ShowToast(
-				fmt.Sprintf("Convoy close failed: %s", msg.err),
-				components.ToastError, toastDuration,
-			)
-			m.toast = toast
-			return m, cmd
-		}
-		toast, cmd := components.ShowToast(
+		return m.toastResult(msg.err,
+			"Convoy close failed",
 			fmt.Sprintf("Convoy %s closed", msg.convoyID),
-			components.ToastSuccess, toastDuration,
-		)
-		m.toast = toast
-		return m, tea.Batch(cmd, fetchConvoyList)
+			fetchConvoyList)
 
 	case mailInboxMsg:
 		if msg.err == nil {
@@ -1293,63 +1220,42 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case mailReplyResultMsg:
-		if msg.err != nil {
-			toast, cmd := components.ShowToast(
-				fmt.Sprintf("Reply failed: %s", msg.err),
-				components.ToastError, toastDuration,
-			)
-			m.toast = toast
-			return m, cmd
-		}
-		toast, cmd := components.ShowToast(
-			"Reply sent",
-			components.ToastSuccess, toastDuration,
-		)
-		m.toast = toast
-		return m, tea.Batch(cmd, fetchMailInbox)
+		return m.toastResult(msg.err, "Reply failed", "Reply sent", fetchMailInbox)
 
 	case mailArchiveResultMsg:
-		if msg.err != nil {
-			toast, cmd := components.ShowToast(
-				fmt.Sprintf("Archive failed: %s", msg.err),
-				components.ToastError, toastDuration,
-			)
-			m.toast = toast
-			return m, cmd
-		}
-		toast, cmd := components.ShowToast(
+		return m.toastResult(msg.err,
+			"Archive failed",
 			fmt.Sprintf("Archived %s", msg.messageID),
-			components.ToastSuccess, toastDuration,
-		)
-		m.toast = toast
-		return m, tea.Batch(cmd, fetchMailInbox)
+			fetchMailInbox)
 
 	case mailSendResultMsg:
-		if msg.err != nil {
-			toast, cmd := components.ShowToast(
-				fmt.Sprintf("Send failed: %s", msg.err),
-				components.ToastError, toastDuration,
-			)
-			m.toast = toast
-			return m, cmd
-		}
 		display := msg.subject
 		if len(display) > 30 {
 			display = display[:27] + "..."
 		}
-		toast, cmd := components.ShowToast(
+		return m.toastResult(msg.err,
+			"Send failed",
 			fmt.Sprintf("Sent to %s: %s", msg.address, display),
-			components.ToastSuccess, toastDuration,
-		)
-		m.toast = toast
-		return m, tea.Batch(cmd, fetchMailInbox)
+			fetchMailInbox)
 
 	case mailMarkReadResultMsg:
 		if msg.err == nil {
-			// Refresh mail to update read status
 			return m, fetchMailInbox
 		}
 		return m, nil
+
+	case mailMarkAllReadResultMsg:
+		return m.toastResult(msg.err, "Mark all read failed", "All messages marked read", fetchMailInbox)
+
+	case convoyWatchResultMsg:
+		return m.toastResult(msg.err,
+			"Watch failed",
+			fmt.Sprintf("Watching convoy %s", msg.convoyID))
+
+	case convoyUnwatchResultMsg:
+		return m.toastResult(msg.err,
+			"Unwatch failed",
+			fmt.Sprintf("Unwatched convoy %s", msg.convoyID))
 
 	case moleculeDAGMsg:
 		if msg.err == nil && msg.dag != nil {
@@ -1640,7 +1546,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// When Gas Town panel is focused, route its keys before global handlers
 	if m.showGasTown && m.activPane == PaneDetail {
 		switch msg.String() {
-		case "j", "k", "up", "down", "g", "G", "n", "h", "K", "tab", "enter", "l", "x", "r", "d", "w":
+		case "j", "k", "up", "down", "g", "G", "n", "h", "K", "tab", "enter", "l", "x", "r", "d", "w", "W", "R":
 			logAction("gastown panel key: %s", msg.String())
 			var cmd tea.Cmd
 			m.gasTown, cmd = m.gasTown.Update(msg)
@@ -2419,9 +2325,29 @@ func (m Model) executePaletteAction(action components.PaletteAction) (tea.Model,
 }
 
 // handleGasTownAction processes actions emitted by the Gas Town panel.
+// toastResult handles the common error/success toast pattern for async action results.
+// On error, shows an error toast with "failPrefix: err". On success, shows successMsg
+// and batches any follow-up commands.
+func (m Model) toastResult(err error, failPrefix, successMsg string, followUp ...tea.Cmd) (Model, tea.Cmd) {
+	if err != nil {
+		toast, cmd := components.ShowToast(
+			failPrefix+": "+err.Error(),
+			components.ToastError, toastDuration,
+		)
+		m.toast = toast
+		return m, cmd
+	}
+	toast, cmd := components.ShowToast(successMsg, components.ToastSuccess, toastDuration)
+	m.toast = toast
+	if len(followUp) > 0 {
+		return m, tea.Batch(append([]tea.Cmd{cmd}, followUp...)...)
+	}
+	return m, cmd
+}
+
 func (m Model) handleGasTownAction(msg views.GasTownActionMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
-	case "nudge":
+	case views.ActionNudge:
 		// Reuse the existing nudge input flow
 		m.nudging = true
 		target := msg.Agent.Address
@@ -2436,7 +2362,7 @@ func (m Model) handleGasTownAction(msg views.GasTownActionMsg) (tea.Model, tea.C
 		m.nudgeInput.Focus()
 		return m, textinput.Blink
 
-	case "handoff":
+	case views.ActionHandoff:
 		if !m.inTmux {
 			toast, cmd := components.ShowToast(
 				"Handoff requires tmux",
@@ -2456,7 +2382,7 @@ func (m Model) handleGasTownAction(msg views.GasTownActionMsg) (tea.Model, tea.C
 			return handoffResultMsg{target: agentName, err: err}
 		}
 
-	case "decommission":
+	case views.ActionDecommission:
 		address := msg.Agent.Address
 		if address == "" {
 			address = msg.Agent.Name
@@ -2466,21 +2392,21 @@ func (m Model) handleGasTownAction(msg views.GasTownActionMsg) (tea.Model, tea.C
 			return decommissionResultMsg{address: msg.Agent.Name, err: err}
 		}
 
-	case "convoy_land":
+	case views.ActionConvoyLand:
 		convoyID := msg.ConvoyID
 		return m, func() tea.Msg {
 			err := gastown.ConvoyLand(convoyID)
 			return convoyLandResultMsg{convoyID: convoyID, err: err}
 		}
 
-	case "convoy_close":
+	case views.ActionConvoyClose:
 		convoyID := msg.ConvoyID
 		return m, func() tea.Msg {
 			err := gastown.ConvoyClose(convoyID)
 			return convoyCloseResultMsg{convoyID: convoyID, err: err}
 		}
 
-	case "mail_reply":
+	case views.ActionMailReply:
 		m.mailReplying = true
 		m.mailReplyID = msg.Mail.ID
 		m.mailReplyInput = textinput.New()
@@ -2490,21 +2416,41 @@ func (m Model) handleGasTownAction(msg views.GasTownActionMsg) (tea.Model, tea.C
 		m.mailReplyInput.Focus()
 		return m, textinput.Blink
 
-	case "mail_archive":
+	case views.ActionMailArchive:
 		msgID := msg.Mail.ID
 		return m, func() tea.Msg {
 			err := gastown.MailArchive(msgID)
 			return mailArchiveResultMsg{messageID: msgID, err: err}
 		}
 
-	case "mail_read":
+	case views.ActionMailRead:
 		msgID := msg.Mail.ID
 		return m, func() tea.Msg {
 			err := gastown.MailMarkRead(msgID)
 			return mailMarkReadResultMsg{messageID: msgID, err: err}
 		}
 
-	case "mail_compose":
+	case views.ActionMailMarkAllRead:
+		return m, func() tea.Msg {
+			err := gastown.MailMarkAllRead()
+			return mailMarkAllReadResultMsg{err: err}
+		}
+
+	case views.ActionConvoyWatch:
+		convoyID := msg.ConvoyID
+		return m, func() tea.Msg {
+			err := gastown.ConvoyWatch(convoyID)
+			return convoyWatchResultMsg{convoyID: convoyID, err: err}
+		}
+
+	case views.ActionConvoyUnwatch:
+		convoyID := msg.ConvoyID
+		return m, func() tea.Msg {
+			err := gastown.ConvoyUnwatch(convoyID)
+			return convoyUnwatchResultMsg{convoyID: convoyID, err: err}
+		}
+
+	case views.ActionMailCompose:
 		address := msg.Agent.Address
 		if address == "" {
 			address = msg.Agent.Name
