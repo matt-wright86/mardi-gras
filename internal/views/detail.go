@@ -559,6 +559,13 @@ func (d *Detail) renderActivity() string {
 		timeStyle.Render(formatTime(issue.CreatedAt)),
 		eventStyle.Render("Created")))
 
+	// Started (first in_progress transition)
+	if issue.StartedAt != nil {
+		lines = append(lines, fmt.Sprintf("  %s  %s",
+			timeStyle.Render(formatTime(*issue.StartedAt)),
+			eventStyle.Render("Started")))
+	}
+
 	// Due date
 	if issue.DueAt != nil {
 		dueLabel := "Due"

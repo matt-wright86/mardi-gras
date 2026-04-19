@@ -105,6 +105,7 @@ type Issue struct {
 	CreatedAt          time.Time              `json:"created_at"`
 	CreatedBy          string                 `json:"created_by,omitempty"`
 	UpdatedAt          time.Time              `json:"updated_at"`
+	StartedAt          *time.Time             `json:"started_at,omitempty"`
 	ClosedAt           *time.Time             `json:"closed_at,omitempty"`
 	CloseReason        string                 `json:"close_reason,omitempty"`
 	Dependencies       []Dependency           `json:"dependencies,omitempty"`

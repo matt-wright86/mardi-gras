@@ -34,7 +34,7 @@ const bdListBasicIssue = `[{
 	}
 }]`
 
-// bdListClosedIssue represents a closed issue with close_reason and closed_at.
+// bdListClosedIssue represents a closed issue with close_reason, started_at, and closed_at.
 const bdListClosedIssue = `[{
 	"id": "proj-010",
 	"title": "Fix login redirect loop",
@@ -45,6 +45,7 @@ const bdListClosedIssue = `[{
 	"created_at": "2026-02-20T10:00:00-06:00",
 	"created_by": "alice",
 	"updated_at": "2026-02-21T16:00:00-06:00",
+	"started_at": "2026-02-20T14:00:00-06:00",
 	"closed_at": "2026-02-21T16:00:00-06:00",
 	"close_reason": "Root cause was stale session cookie; cleared on redirect."
 }]`
@@ -246,6 +247,13 @@ func TestContractClosedIssue(t *testing.T) {
 	if iss.ClosedAt.Year() != 2026 || iss.ClosedAt.Month() != 2 || iss.ClosedAt.Day() != 21 {
 		t.Errorf("ClosedAt = %v, expected 2026-02-21", iss.ClosedAt)
 	}
+
+	if iss.StartedAt == nil {
+		t.Fatal("StartedAt should not be nil")
+	}
+	if iss.StartedAt.Year() != 2026 || iss.StartedAt.Month() != 2 || iss.StartedAt.Day() != 20 {
+		t.Errorf("StartedAt = %v, expected 2026-02-20", iss.StartedAt)
+	}
 }
 
 func TestContractDependencies(t *testing.T) {
@@ -334,6 +342,9 @@ func TestContractMinimalIssue(t *testing.T) {
 	}
 	if iss.ClosedAt != nil {
 		t.Error("ClosedAt should be nil")
+	}
+	if iss.StartedAt != nil {
+		t.Error("StartedAt should be nil")
 	}
 	if iss.CloseReason != "" {
 		t.Error("CloseReason should be empty")
@@ -658,6 +669,7 @@ func TestContractNullOptionalFields(t *testing.T) {
 		"updated_at": "2026-03-01T00:00:00Z",
 		"description": null,
 		"closed_at": null,
+		"started_at": null,
 		"due_at": null,
 		"defer_until": null,
 		"labels": null,
@@ -680,6 +692,9 @@ func TestContractNullOptionalFields(t *testing.T) {
 	}
 	if iss.ClosedAt != nil {
 		t.Error("null closed_at should be nil")
+	}
+	if iss.StartedAt != nil {
+		t.Error("null started_at should be nil")
 	}
 	if iss.DueAt != nil {
 		t.Error("null due_at should be nil")
