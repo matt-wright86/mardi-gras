@@ -105,6 +105,39 @@ func TestSetIssueUpdatesContent(t *testing.T) {
 	}
 }
 
+// Refresh polls call SetIssue with the same issue every tick. Scroll position
+// must be preserved in that case, but reset when the user navigates to a
+// different issue.
+func TestSetIssuePreservesScrollOnSameIssue(t *testing.T) {
+	longBody := strings.Repeat("paragraph line that wraps and contributes to height\n\n", 80)
+	issues := []data.Issue{
+		{ID: "mg-001", Title: "Long issue", Description: longBody, Status: data.StatusOpen, Priority: data.PriorityMedium, IssueType: data.TypeTask},
+		{ID: "mg-002", Title: "Other issue", Description: longBody, Status: data.StatusOpen, Priority: data.PriorityMedium, IssueType: data.TypeTask},
+	}
+	d := NewDetail(60, 20, issues)
+	d.SetIssue(&issues[0])
+
+	d.Viewport.SetYOffset(15)
+	want := d.Viewport.YOffset()
+	if want == 0 {
+		t.Fatalf("test setup: expected non-zero scroll offset after SetYOffset(15), got 0")
+	}
+
+	// Simulate a poll-driven re-render of the same issue (pointer may differ
+	// even when ID is the same — use a fresh struct value with the same ID).
+	same := issues[0]
+	d.SetIssue(&same)
+	if got := d.Viewport.YOffset(); got != want {
+		t.Fatalf("scroll position not preserved on same-issue refresh: got YOffset=%d, want %d", got, want)
+	}
+
+	// Switching to a different issue must reset to top.
+	d.SetIssue(&issues[1])
+	if got := d.Viewport.YOffset(); got != 0 {
+		t.Fatalf("scroll position not reset when switching issues: got YOffset=%d, want 0", got)
+	}
+}
+
 func TestSetSizeUpdatesDimensions(t *testing.T) {
 	issues := []data.Issue{
 		{ID: "mg-001", Title: "Test", Status: data.StatusOpen, Priority: data.PriorityMedium, IssueType: data.TypeTask},
